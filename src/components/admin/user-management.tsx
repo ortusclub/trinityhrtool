@@ -21,7 +21,7 @@ function formatRelative(ts: string | null): string {
   return `${formatDistanceToNow(new Date(ts))} ago`;
 }
 
-const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US"];
+const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US", "KR"];
 
 export function UserManagement({
   users,

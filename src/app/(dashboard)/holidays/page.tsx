@@ -23,13 +23,14 @@ export default async function HolidaysPage() {
     IT: [],
     AE: [],
     US: [],
+    KR: [],
   };
 
   for (const holiday of holidays ?? []) {
     grouped[holiday.country as HolidayCountry]?.push(holiday);
   }
 
-  const countryOrder: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US"];
+  const countryOrder: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US", "KR"];
 
   return (
     <div className="space-y-6">

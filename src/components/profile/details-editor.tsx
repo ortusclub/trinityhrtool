@@ -47,7 +47,7 @@ type Props = {
   canSeeEndDate: boolean;
 };
 
-const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US"];
+const COUNTRY_OPTIONS: HolidayCountry[] = ["PH", "XK", "IT", "AE", "US", "KR"];
 
 export function DetailsEditor({
   user,

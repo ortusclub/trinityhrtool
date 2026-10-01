@@ -13,6 +13,7 @@ const FETCHABLE = [
   { code: "PH", label: "Philippines" },
   { code: "IT", label: "Italy" },
   { code: "US", label: "United States" },
+  { code: "KR", label: "South Korea" },
 ] as const;
 const UNFETCHABLE = [
   { code: "XK", label: "Kosovo" },

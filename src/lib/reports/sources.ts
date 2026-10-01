@@ -638,6 +638,7 @@ export const SOURCES: SourceDef[] = [
           { value: "IT", label: "Italy" },
           { value: "AE", label: "UAE" },
           { value: "US", label: "United States" },
+          { value: "KR", label: "South Korea" },
         ],
       },
       { id: "date_range", label: "Date range", type: "date_range" },

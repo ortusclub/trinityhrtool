@@ -80,7 +80,7 @@ type BuiltInImportSpec = {
   parse: (raw: string) => ParsedValue;
 };
 
-const COUNTRY_VALUES = new Set(["PH", "XK", "IT", "AE", "US"]);
+const COUNTRY_VALUES = new Set(["PH", "XK", "IT", "AE", "US", "KR"]);
 const COMPANY_VALUES = new Set<string>(COMPANY_OPTIONS);
 // Accept a few short aliases in CSVs so HR doesn't have to type the legal
 // suffix every time. Map normalised (lowercased, trimmed) input → canonical.

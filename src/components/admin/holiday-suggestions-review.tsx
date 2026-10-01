@@ -28,7 +28,7 @@ export function HolidaySuggestionsReview({
   if (suggestions.length === 0) return null;
 
   // Group by country, preserving the PH/XK/IT/AE order used elsewhere.
-  const order: string[] = ["PH", "XK", "IT", "AE", "US"];
+  const order: string[] = ["PH", "XK", "IT", "AE", "US", "KR"];
   const byCountry = new Map<string, HolidaySuggestion[]>();
   for (const s of suggestions) {
     (byCountry.get(s.country) ?? byCountry.set(s.country, []).get(s.country)!).push(s);

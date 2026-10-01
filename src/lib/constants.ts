@@ -50,6 +50,7 @@ export const TIMEZONE_OPTIONS: { value: string; label: string; abbrev: string }[
   { value: "Asia/Manila", label: "PHT (Manila)", abbrev: "PHT" },
   { value: "Europe/Berlin", label: "CET (Berlin)", abbrev: "CET" },
   { value: "Asia/Dubai", label: "GST (Dubai)", abbrev: "GST" },
+  { value: "Asia/Seoul", label: "KST (Seoul)", abbrev: "KST" },
   { value: "America/New_York", label: "ET (New York)", abbrev: "ET" },
   { value: "America/Chicago", label: "CT (Chicago)", abbrev: "CT" },
   { value: "America/Denver", label: "MT (Denver)", abbrev: "MT" },

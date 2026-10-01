@@ -22,6 +22,7 @@ const COUNTRY_MAP: Record<string, string> = {
   IT: "IT", ITALY: "IT",
   AE: "AE", UAE: "AE", DUBAI: "AE",
   US: "US", USA: "US", "UNITED STATES": "US",
+  KR: "KR", KOREA: "KR", "SOUTH KOREA": "KR",
 };
 
 const ROLE_MAP: Record<string, string> = {

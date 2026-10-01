@@ -43,7 +43,7 @@ export type LeaveType =
   | "solo_parent"
   | "bereavement";
 export type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
-export type HolidayCountry = "PH" | "XK" | "IT" | "AE" | "US";
+export type HolidayCountry = "PH" | "XK" | "IT" | "AE" | "US" | "KR";
 export type EmploymentType = "employee" | "consultant";
 export type HolidayWorkCompensation = "holiday_pay" | "cto";
 export type HolidayWorkDuration = "full_day" | "half_day";
@@ -54,6 +54,7 @@ export const HOLIDAY_COUNTRY_LABELS: Record<HolidayCountry, string> = {
   IT: "Italy",
   AE: "Dubai (UAE)",
   US: "United States",
+  KR: "South Korea",
 };
 
 export type Company =

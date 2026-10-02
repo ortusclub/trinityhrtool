@@ -18,10 +18,11 @@ export default function HolidayWorkRequestPage() {
   const [error, setError] = useState("");
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loadingHolidays, setLoadingHolidays] = useState(true);
+  // Default to forced CTO until the profile loads, so the choice never
+  // flashes for someone who isn't entitled to it.
   const [policy, setPolicy] = useState<HolidayWorkPolicy>({
     kind: "forced_cto",
-    reason: "under_one_year",
-    eligibleAt: null,
+    reason: "non_ph",
   });
 
   const [form, setForm] = useState<{
@@ -52,7 +53,7 @@ export default function HolidayWorkRequestPage() {
 
       const { data: userData } = await supabase
         .from("users")
-        .select("holiday_country, employment_type, hire_date")
+        .select("holiday_country, employment_type")
         .eq("id", user.id)
         .single();
 
@@ -62,7 +63,6 @@ export default function HolidayWorkRequestPage() {
         getHolidayWorkPolicy({
           holiday_country: userData.holiday_country,
           employment_type: userData.employment_type,
-          hire_date: userData.hire_date,
         })
       );
 
@@ -335,13 +335,6 @@ export default function HolidayWorkRequestPage() {
               </span>{" "}
               when your manager approves this request.
             </p>
-            {policy.reason === "under_one_year" && (
-              <p className="mt-2 text-xs text-teal-800">
-                {policy.eligibleAt
-                  ? `Once you reach 1 year of tenure (${formatDate(policy.eligibleAt)}), you'll also be able to choose Holiday Pay instead of CTO.`
-                  : "Once you reach 1 year of tenure, you'll also be able to choose Holiday Pay instead of CTO."}
-              </p>
-            )}
           </div>
         )}
 

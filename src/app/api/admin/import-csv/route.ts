@@ -87,6 +87,7 @@ interface ParsedRow {
   endDate: string;
   isActive: boolean | null;
   overtimeEligible: boolean | null;
+  employmentType: string;
   days: ({ location: string; start: string; end: string } | "rest" | null)[];
 }
 
@@ -147,6 +148,12 @@ function parseCSV(csvText: string): ParsedRow[] {
     "ot eligible",
     "ot_eligible",
   ]);
+  const employmentTypeIdx = col([
+    "employment type",
+    "employment_type",
+    "employee type",
+    "employee_type",
+  ]);
   const mIdx = col(["m", "monday"]);
   const tIdx = col(["t", "tuesday"]);
   const wIdx = col(["w", "wednesday"]);
@@ -199,6 +206,17 @@ function parseCSV(csvText: string): ParsedRow[] {
         overtimeEligibleRaw.toLowerCase()
       );
     }
+    // Only 'consultant' flips the flag; anything else (including a blank cell)
+    // leaves the column alone so an import can't silently demote people.
+    const employmentTypeRaw =
+      employmentTypeIdx >= 0 ? parts[employmentTypeIdx] || "" : "";
+    const employmentType = ["consultant", "consultants"].includes(
+      employmentTypeRaw.trim().toLowerCase()
+    )
+      ? "consultant"
+      : ["employee", "employees"].includes(employmentTypeRaw.trim().toLowerCase())
+        ? "employee"
+        : "";
 
     const firstName = hasNameParts ? (parts[firstNameIdx] || "") : "";
     const middleName = hasNameParts && middleNameIdx >= 0 ? (parts[middleNameIdx] || "") : "";
@@ -230,6 +248,7 @@ function parseCSV(csvText: string): ParsedRow[] {
       endDate: endDateRaw,
       isActive,
       overtimeEligible,
+      employmentType,
       days,
     });
   }
@@ -341,6 +360,8 @@ export async function POST(request: Request) {
           if (row.isActive !== null) updateFields.is_active = row.isActive;
           if (row.overtimeEligible !== null)
             updateFields.overtime_eligible = row.overtimeEligible;
+          if (row.employmentType)
+            updateFields.employment_type = row.employmentType;
 
           const existingId = emailToId.get(row.email);
 

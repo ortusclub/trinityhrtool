@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { full_name, preferred_name, first_name, middle_name, last_name, email, role, company, department, job_title, manager_id, desktime_employee_id, desktime_url, holiday_country, timezone, birthday, hire_date, regularization_date, end_date, is_active, overtime_eligible, schedule } = body;
+  const { full_name, preferred_name, first_name, middle_name, last_name, email, role, company, department, job_title, manager_id, desktime_employee_id, desktime_url, holiday_country, timezone, birthday, hire_date, regularization_date, end_date, is_active, overtime_eligible, employment_type, schedule } = body;
 
   if (!email) {
     return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -74,6 +74,10 @@ export async function POST(request: Request) {
     timezone: timezone || "Asia/Manila",
     is_active: is_active !== false,
     overtime_eligible: Boolean(overtime_eligible),
+    // Column default is 'employee', but set it explicitly so the creation form
+    // is the source of truth. Anything other than 'consultant' falls back to
+    // 'employee' — the CHECK constraint only allows those two.
+    employment_type: employment_type === "consultant" ? "consultant" : "employee",
   };
   if (company) updateFields.company = company;
   if (department) updateFields.department = department;

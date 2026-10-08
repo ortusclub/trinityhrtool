@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Pencil, Save, X, Calendar, Trash2, Plus, KeyRound, Palmtree, Download, UserCog } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { EmployeeLeaveTypesModal } from "./employee-leave-types";
-import type { User, UserRole, HolidayCountry, Company } from "@/types/database";
+import type { User, UserRole, HolidayCountry, Company, EmploymentType } from "@/types/database";
 import { HOLIDAY_COUNTRY_LABELS, COMPANY_OPTIONS } from "@/types/database";
 import { displayName } from "@/lib/utils";
 import { TIMEZONE_OPTIONS, getTzLabel } from "@/lib/constants";
@@ -1075,6 +1075,7 @@ function AddUserModal({
     email: "",
     role: "employee" as UserRole,
     company: "" as Company | "",
+    employment_type: "employee" as EmploymentType,
     department: "",
     job_title: "",
     manager_id: "",
@@ -1213,6 +1214,14 @@ function AddUserModal({
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Employment Type</label>
+              <select value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value as EmploymentType })} className={inputClass}>
+                <option value="employee">Employee</option>
+                <option value="consultant">Consultant</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-400">Consultants don&apos;t get CTO compensation for holiday work.</p>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Department</label>

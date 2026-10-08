@@ -52,8 +52,11 @@ export async function GET(request: Request) {
 
   // Only employees whose birth month is the current Manila month, excluding
   // interns — they don't receive Birthday Leave. Intern = job title contains
-  // the whole word "intern" (the only available signal; employment_type is
-  // uniform). Word boundary avoids matching e.g. "International".
+  // the whole word "intern"; word boundary avoids matching e.g.
+  // "International". Deliberately NOT employment_type: that column became
+  // meaningful on 2026-10-08 (all of Kosovo and Rome plus a few PH staff are
+  // now 'consultant'), but consultant status says nothing about leave
+  // entitlement either way, so it is the wrong signal for this filter.
   const candidates = (users ?? []).filter((u) => {
     if (/\bintern\b/i.test(u.job_title ?? "")) return false;
     const m = parseInt(u.birthday!.slice(5, 7), 10);

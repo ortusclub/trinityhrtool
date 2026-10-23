@@ -166,6 +166,35 @@ export interface DocumentRequest {
   created_at: string;
 }
 
+/** One line of a payslip, as the payroll site prints it. A null amount is a
+    heading or a note row (e.g. a loan's installment detail). */
+export interface PayslipLine {
+  label: string;
+  amount: number | null;
+  kind?: "head" | "sub" | null;
+}
+
+export interface Payslip {
+  id: string;
+  employee_id: string;
+  period_id: string;
+  cutoff_start: string;
+  cutoff_end: string;
+  payout_date: string;
+  lines: {
+    earnings: PayslipLine[];
+    deductions: PayslipLine[];
+    net_taxable?: number | null;
+    company?: { name?: string; address?: string; tin?: string } | null;
+    employee?: { code?: string; position?: string; branch?: string } | null;
+  };
+  gross_pay: number;
+  total_deductions: number;
+  net_pay: number;
+  remarks: string | null;
+  sent_at: string;
+}
+
 export interface DocumentRequestWithEmployee extends DocumentRequest {
   employee?: {
     full_name: string;

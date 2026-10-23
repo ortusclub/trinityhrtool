@@ -32,6 +32,7 @@ import {
   Trophy,
   CalendarClock,
   ShieldAlert,
+  Receipt,
 } from "lucide-react";
 import { useState } from "react";
 import type { UserRole } from "@/types/database";
@@ -69,6 +70,7 @@ const navSections: NavSection[] = [
       { label: "My Attendance", href: "/attendance", icon: <Clock size={20} />, minRole: "employee" },
       { label: "Schedule Requests", href: "/requests", icon: <ArrowRightLeft size={20} />, minRole: "employee" },
       { label: "Document Requests", href: "/documents", icon: <FileText size={20} />, minRole: "employee" },
+      { label: "My Payslips", href: "/payslips", icon: <Receipt size={20} />, minRole: "employee" },
       { label: "Flags", href: "/flags", icon: <Flag size={20} />, minRole: "employee" },
       { label: "Holidays", href: "/holidays", icon: <CalendarHeart size={20} />, minRole: "employee" },
       { label: "Team Calendar", href: "/weekly", icon: <CalendarDays size={20} />, minRole: "employee" },
@@ -99,6 +101,7 @@ const navSections: NavSection[] = [
       { label: "Leave Credits", href: "/admin/leave-credits", icon: <Ticket size={20} />, minRole: "hr_admin" },
       { label: "Anniversary Benefits", href: "/admin/settings/anniversary-benefits", icon: <Gift size={20} />, minRole: "super_admin" },
       { label: "Document Requests", href: "/admin/document-requests", icon: <FileText size={20} />, minRole: "hr_admin" },
+      { label: "Payslips", href: "/admin/payslips", icon: <Receipt size={20} />, minRole: "hr_admin" },
       { label: "Bulk Import", href: "/admin/bulk-import", icon: <Upload size={20} />, minRole: "hr_admin", roles: ["hr_support", "hr_admin", "super_admin"] },
       { label: "Pending Changes", href: "/admin/pending-changes", icon: <Inbox size={20} />, minRole: "hr_admin" },
       { label: "Concerns", href: "/concerns/admin", icon: <ShieldAlert size={20} />, minRole: "hr_admin" },

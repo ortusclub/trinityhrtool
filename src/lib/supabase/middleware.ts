@@ -48,8 +48,8 @@ export async function updateSession(request: NextRequest) {
   // cookies and does not follow redirects — bouncing it to /login would look
   // to the firmware like the server is broken, and it would silently stop
   // posting attendance. It authenticates on its serial number instead; see
-  // lib/biometric/device.ts. /api/biometric/ingest and /api/directory use
-  // bearer secrets.
+  // lib/biometric/device.ts. /api/biometric/ingest, /api/directory and
+  // /api/payslips/import use bearer secrets.
   const isAuthRoute =
     request.nextUrl.pathname.startsWith("/login") ||
     request.nextUrl.pathname.startsWith("/auth") ||
@@ -58,6 +58,7 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/calendar/feed") ||
     request.nextUrl.pathname.startsWith("/api/biometric/ingest") ||
     request.nextUrl.pathname.startsWith("/api/directory") ||
+    request.nextUrl.pathname.startsWith("/api/payslips/import") ||
     request.nextUrl.pathname.startsWith("/iclock");
 
   // Skip getUser() for auth routes — calling it during the PKCE callback

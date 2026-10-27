@@ -33,6 +33,7 @@ import {
   CalendarClock,
   ShieldAlert,
   Wallet,
+  Receipt,
 } from "lucide-react";
 import { useState } from "react";
 import type { UserRole } from "@/types/database";
@@ -67,6 +68,7 @@ const navSections: NavSection[] = [
     minRole: "employee",
     items: [
       { label: "My Schedule", href: "/schedule", icon: <Calendar size={20} />, minRole: "employee" },
+      { label: "Payslips", href: "/payslips", icon: <Receipt size={20} />, minRole: "employee" },
       { label: "My Attendance", href: "/attendance", icon: <Clock size={20} />, minRole: "employee" },
       { label: "Schedule Requests", href: "/requests", icon: <ArrowRightLeft size={20} />, minRole: "employee" },
       { label: "Document Requests", href: "/documents", icon: <FileText size={20} />, minRole: "employee" },
@@ -168,9 +170,14 @@ export function Sidebar({
         seen.add(href);
       }
     }
-    for (const it of items) {
-      if (!seen.has(it.href)) ordered.push(it);
-    }
+    // Items missing from the saved order (added since it was saved) go
+    // right after the item declared before them, not at the end.
+    items.forEach((it, i) => {
+      if (seen.has(it.href)) return;
+      const prev = i > 0 ? ordered.indexOf(items[i - 1]) : -1;
+      ordered.splice(prev + 1, 0, it);
+      seen.add(it.href);
+    });
     return ordered;
   };
 

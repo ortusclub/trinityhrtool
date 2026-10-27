@@ -13,6 +13,7 @@ const FEATURES: ReadonlyArray<{
   group: FeatureGroup;
 }> = [
   { route: "/schedule", label: "My Schedule", group: "My Workspace" },
+  { route: "/payslips", label: "Payslips", group: "My Workspace" },
   { route: "/attendance", label: "My Attendance", group: "My Workspace" },
   { route: "/requests", label: "Schedule Requests", group: "My Workspace" },
   { route: "/documents", label: "Document Requests", group: "My Workspace" },

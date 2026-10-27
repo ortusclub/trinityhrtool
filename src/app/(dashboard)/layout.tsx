@@ -32,9 +32,11 @@ export default async function DashboardLayout({
         .eq("status", "pending"),
     ]);
 
-  const comingSoonRoutes = (comingSoon ?? []).map((s) =>
-    s.key.replace("coming_soon:", "")
-  );
+  const comingSoonRoutes = [
+    ...(comingSoon ?? []).map((s) => s.key.replace("coming_soon:", "")),
+    // Payslips is a placeholder until payroll publishes them.
+    "/payslips",
+  ];
   let sidebarOrder: Record<string, string[]> = {};
   if (orderRow?.value) {
     try {

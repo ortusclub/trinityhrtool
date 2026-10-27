@@ -13,8 +13,12 @@ export default async function DashboardLayout({
   const user = await getCurrentUser();
   const supabase = await createClient();
 
-  const [{ data: comingSoon }, { data: orderRow }, { count: pendingPeerCount }] =
-    await Promise.all([
+  const [
+    { data: comingSoon },
+    { data: orderRow },
+    { count: pendingPeerCount },
+    { count: releasedPayslips },
+  ] = await Promise.all([
       supabase
         .from("system_settings")
         .select("key")
@@ -30,12 +34,16 @@ export default async function DashboardLayout({
         .select("id", { count: "exact", head: true })
         .eq("reviewer_id", user.id)
         .eq("status", "pending"),
+      supabase
+        .from("payslip_releases")
+        .select("period_id", { count: "exact", head: true })
+        .not("published_at", "is", null),
     ]);
 
   const comingSoonRoutes = [
     ...(comingSoon ?? []).map((s) => s.key.replace("coming_soon:", "")),
-    // Payslips is a placeholder until payroll publishes them.
-    "/payslips",
+    // Payslips stays "Soon" until payroll publishes the first cutoff.
+    ...(releasedPayslips ? [] : ["/payslips"]),
   ];
   let sidebarOrder: Record<string, string[]> = {};
   if (orderRow?.value) {

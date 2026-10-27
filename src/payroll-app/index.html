@@ -440,10 +440,67 @@
 
   <!-- ==================== PAYSLIP ==================== -->
   <section class="panel hidden" id="tab-payslip">
+    <div class="notice warn hidden" id="psSetup"></div>
+
     <div class="card">
       <div class="card-head">
-        <h2>Payslip</h2>
-        <p class="hint" style="display:block">Coming soon.</p>
+        <h2>Release payslips</h2>
+        <p class="hint" style="display:block">
+          Prepare saves the cutoff's payslips to TrinityHR, matched to each account by work email.
+          Nobody sees them until you publish; each person then finds their own under
+          My Workspace &rarr; Payslips. Preparing again replaces the cutoff's payslips with the
+          figures here now.
+        </p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 8px">
+        <label><span>Cutoff &middot; <span id="psYear"></span> (change the year on Payroll Run)</span>
+          <select id="psPeriod"></select></label>
+      </div>
+      <p style="padding:0 20px;margin:4px 0;font-size:13px" id="psStatus"></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:8px 20px 18px">
+        <button class="btn ghost" id="psPrepare" type="button">Prepare payslips</button>
+        <button class="btn" id="psPublish" type="button">Publish to employees</button>
+        <button class="btn ghost danger" id="psUnpublish" type="button">Unpublish</button>
+      </div>
+      <div class="notice warn hidden" id="psUnmatched" style="margin:0 20px 18px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Preview as an employee</h2>
+        <p class="hint" style="display:block">Exactly what they see, with the settings below. Prepare the cutoff first.</p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 12px">
+        <label>Employee <select id="psEmployee"></select></label>
+      </div>
+      <iframe id="psPreview" title="Payslip preview" class="hidden"
+        style="display:block;width:calc(100% - 40px);height:760px;margin:0 20px 20px;border:1px solid var(--border);border-radius:8px;background:#fff"></iframe>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>What shows on every payslip</h2>
+        <p class="hint" style="display:block">
+          Applies to all payslips, already released ones included. Totals and net pay never change;
+          these only hide or show rows and details.
+        </p>
+      </div>
+      <label class="checkline"><input type="checkbox" data-ps="showCompanyAddress"> Company address</label>
+      <label class="checkline"><input type="checkbox" data-ps="showCompanyTin"> Company TIN</label>
+      <label class="checkline"><input type="checkbox" data-ps="showPosition"> Position</label>
+      <label class="checkline"><input type="checkbox" data-ps="showEmployeeCode"> Employee code</label>
+      <label class="checkline"><input type="checkbox" data-ps="showBranch"> Branch</label>
+      <label class="checkline"><input type="checkbox" data-ps="showZeroLines"> Lines of &#8369;0.00 (e.g. Days Absent Deduction when there were none)</label>
+      <label class="checkline"><input type="checkbox" data-ps="showLineNotes"> Detail rows without an amount (e.g. loan installment and balance, paid time off)</label>
+      <label class="checkline"><input type="checkbox" data-ps="showNetTaxable"> Net taxable amount</label>
+      <label class="checkline"><input type="checkbox" data-ps="showRemarks"> Remarks</label>
+      <div class="form-grid" style="padding:4px 20px 12px;grid-template-columns:1fr">
+        <label>Note at the bottom of every payslip (optional)
+          <textarea id="psNote" rows="3" maxlength="2000" style="font:inherit;font-weight:400;padding:8px;border:1px solid var(--border-strong);border-radius:8px"></textarea></label>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;padding:0 20px 18px">
+        <button class="btn" id="psSaveSettings" type="button">Save</button>
+        <span class="muted" id="psSettingsMsg" style="font-size:13px"></span>
       </div>
     </div>
   </section>

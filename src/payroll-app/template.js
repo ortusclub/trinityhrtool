@@ -355,7 +355,8 @@
      Every sheet of the workbook with an "EMPLOYEE ID" + "NET PAY" header
      row is read, so a monthly file holding both cutoffs on two tabs loads
      both. Each sheet's cutoff comes from the title above the header
-     ("Payroll | January 1 - 15, 2026"), or failing that its tab name. A
+     ("Payroll | January 1 - 15, 2026"), or failing that its tab name; a
+     one-register file named for its cutoff takes the file name instead. A
      title naming only a month ("Payroll | January 2026") is resolved per
      row from PAY PERIOD: 2 is the 1st–15th, 1 the 16th to month end.
      --------------------------------------------------------------------- */
@@ -415,6 +416,11 @@
       if (register.length) names = register;
       names = names.filter(function (n) { return !/^\s*final\s*pay/i.test(n); });
       var payout = payoutFromFileName(file && file.name);
+      // A file named for its cutoff ("April 1 - 15, 2026.xlsx") holding one
+      // register is that cutoff, even when the title above the header says
+      // otherwise (the January 2026 files' titles say 2025).
+      var named = readCutoff(String((file && file.name) || '').replace(/\.[^.]*$/, ''));
+      if (!named || !named.start || names.length !== 1) named = null;
       names.forEach(function (name) {
         var grid = sheets[name] || [];
         var hr = -1, head = null;
@@ -445,7 +451,11 @@
         var title = '';
         for (var t = 0; t < hr; t++) title += ' ' + (grid[t] || []).filter(function (x) { return x !== null && x !== undefined; }).join(' ');
         var titled = readCutoff(title) || readCutoff(name);
-        var cutoff = payout ? { payout: payout, titled: titled } : titled;
+        var cutoff = payout ? { payout: payout, titled: titled } : named || titled;
+        if (!payout && named && titled && titled.start && titled.start !== named.start) {
+          warnings.push('the title says ' + cutoffTitle(titled) +
+            ', but the file name is for ' + cutoffTitle(named) + ' — read as ' + cutoffTitle(named) + '.');
+        }
 
         var rows = [];
         for (var i = hr + 1; i < grid.length; i++) {

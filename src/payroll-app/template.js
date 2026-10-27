@@ -414,8 +414,11 @@
       var register = names.filter(function (n) { return /payroll\s*register/i.test(n); });
       if (register.length) names = register;
       names = names.filter(function (n) { return !/^\s*final\s*pay/i.test(n); });
-      var payout = payoutFromFileName(file && file.name);
+      var filePayout = payoutFromFileName(file && file.name);
       names.forEach(function (name) {
+        // One workbook can hold many cutoffs, one per tab: a tab named with
+        // its payout date ("2026 0125") wins over the file name's.
+        var payout = payoutFromFileName(name) || filePayout;
         var grid = sheets[name] || [];
         var hr = -1, head = null;
         for (var r = 0; r < Math.min(grid.length, 30); r++) {

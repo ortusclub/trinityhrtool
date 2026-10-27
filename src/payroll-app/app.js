@@ -804,14 +804,14 @@
           var byPayout = periodPaidOn(cutoff.payout);
           if (cutoff.titled && cutoff.titled.start && byPayout && cutoff.titled.start !== byPayout.start) {
             plan.problems.push(where + ': the title says ' + sh.title.replace(/^.*?:\s*/, '') +
-              ', but the file name is for the ' + E.fmtShort(E.parseYmd(cutoff.payout)) + ' ' +
+              ', but the ' + (T.payoutFromFileName(sh.sheet) ? 'tab' : 'file') + ' name is for the ' + E.fmtShort(E.parseYmd(cutoff.payout)) + ' ' +
               cutoff.payout.slice(0, 4) + ' payout — read as ' + T.cutoffTitle(byPayout) + '.');
           }
           cutoff = byPayout ? { start: byPayout.start } : cutoff.titled;
         }
         if (!cutoff) {
           plan.problems.push(where + ': could not tell which cutoff it is — row 2 should read like ' +
-            '"Payroll | January 1 - 15, 2026", or the file name should carry the payout date ' +
+            '"Payroll | January 1 - 15, 2026", or the tab or file name should carry the payout date ' +
             '("… 2026 0125 …"). Skipped.');
           return;
         }

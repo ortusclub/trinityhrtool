@@ -2301,7 +2301,7 @@
      ===================================================================== */
   function switchTab(name) {
     $$('#tabs .tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
-    ['run', 'employees', 'holidays', 'yearend', 'settings'].forEach(function (n) {
+    ['run', 'employees', 'holidays', 'yearend', 'payslip', 'settings'].forEach(function (n) {
       $('#tab-' + n).classList.toggle('hidden', n !== name);
     });
     if (name === 'employees') { renderEmployees(); renderItemsEditor(); renderLoansEditor(); }

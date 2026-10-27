@@ -2491,27 +2491,7 @@
     }
   }
 
-  /* ---- Non-Trinity CSV upload ---- */
-  /** RFC 4180 CSV: quoted cells may hold commas, quotes ("") and line breaks. */
-  function parseCsv(text) {
-    var rows = [], row = [], cell = '', q = false;
-    text = String(text).replace(/^﻿/, '');
-    for (var i = 0; i < text.length; i++) {
-      var ch = text[i];
-      if (q) {
-        if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
-        else cell += ch;
-      } else if (ch === '"') q = true;
-      else if (ch === ',') { row.push(cell); cell = ''; }
-      else if (ch === '\n' || ch === '\r') {
-        if (ch === '\r' && text[i + 1] === '\n') i++;
-        row.push(cell); rows.push(row); row = []; cell = '';
-      } else cell += ch;
-    }
-    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
-    return rows;
-  }
-
+  /* ---- Non-Trinity uploads (Payslip Generator CSV, or the templates below) ---- */
   function csvNum(v) {
     var t = String(v || '').replace(/[,\s]/g, '');
     if (!t || t === '—' || t === '-') return 0;
@@ -2520,9 +2500,16 @@
   }
 
   var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  /** "October 2026" as is; "10/1/2026" or "2026-10-01" as "October 2026". */
+  /** A date as YYYY-MM-DD: from an Excel date number, "10/23/2026" or as is. */
+  function csvDate(v) {
+    var t = String(window.XlsxWriter.toYmd(v) || '').trim(), m;
+    if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) return m[3] + '-' + ('0' + m[1]).slice(-2) + '-' + ('0' + m[2]).slice(-2);
+    return t;
+  }
+
+  /** "October 2026" as is; a date ("10/1/2026", "2026-10-01", Excel's) as "October 2026". */
   function csvPeriod(v) {
-    var t = String(v || '').trim(), m;
+    var t = csvDate(v), m;
     if ((m = t.match(/^(\d{1,2})\/\d{1,2}\/(\d{4})$/))) return MONTHS[+m[1] - 1] + ' ' + m[2];
     if ((m = t.match(/^(\d{4})-(\d{2})-\d{2}$/))) return MONTHS[+m[2] - 1] + ' ' + m[1];
     return t;
@@ -2530,12 +2517,13 @@
 
   /* Mirrors the Payslip Generator sheets (payslip-sheet/NoTax.gs and
      kosovo/SetupKosovo.gs): the same lines, labels and footer. */
-  function readPayslipCsv(text, opts) {
-    var rows = parseCsv(text), hi = -1;
+  function readPayslipRows(rows, opts) {
+    var hi = -1;
+    rows = rows.map(function (r) { return (r || []).map(function (c) { return c === null || c === undefined ? '' : c; }); });
     for (var r = 0; r < Math.min(rows.length, 20); r++) {
       if (String(rows[r][0] || '').trim() === 'No' && rows[r].indexOf('Email') !== -1) { hi = r; break; }
     }
-    if (hi < 0) throw new Error('No header row starting with "No" … "Email" — is this a Payslip Generator CSV?');
+    if (hi < 0) throw new Error('No header row starting with "No" … "Email" — use a template above, or the Payslip Generator\u2019s CSV.');
     var head = rows[hi].map(function (h) { return String(h).replace(/\s*\([A-Z]{3}\)\s*$/, '').trim().toLowerCase(); });
     var kind = head.indexOf('tax status') !== -1 ? 'xk' : head.indexOf('currency') !== -1 ? 'notax' : null;
     if (!kind) throw new Error('Neither a No-Tax payroll (Currency column) nor an XK payroll (Tax status column).');
@@ -2596,7 +2584,7 @@
       if (!currency) { currency = opts.currency; out.defaulted++; }
       if (!/^[A-Z]{3}$/.test(currency)) { out.problems.push(who + ' (row ' + line + '): currency "' + currency + '" — skipped.'); return; }
 
-      var payout = col(row, 'payout date');
+      var payout = csvDate(col(row, 'payout date'));
       out.payouts[payout] = (out.payouts[payout] || 0) + 1;
       out.periods[csvPeriod(col(row, 'payroll period'))] = true;
       out.currencies[currency] = (out.currencies[currency] || 0) + 1;
@@ -2640,9 +2628,15 @@
     $('#upSave').disabled = true;
     $('#upUnmatched').classList.add('hidden');
     if (!f) { $('#upSummary').innerHTML = ''; return; }
-    f.text().then(function (text) {
+    window.XlsxWriter.read(f).then(function (sheets) {
       var cur = $('#upCurrency').value.trim().toUpperCase() || 'EUR';
-      var up = readPayslipCsv(text, { company: $('#upCompany').value.trim(), address: $('#upAddress').value.trim(), currency: cur });
+      var opts = { company: $('#upCompany').value.trim(), address: $('#upAddress').value.trim(), currency: cur };
+      // The first sheet with the header row: a template's, or the CSV's only one.
+      var up = null, err = null;
+      Object.keys(sheets).some(function (n) {
+        try { up = readPayslipRows(sheets[n], opts); return true; } catch (e) { err = err || e; return false; }
+      });
+      if (!up) throw err || new Error('The file is empty.');
       ps.upload = up;
       var existing = ps.batches.filter(function (b) { return b.id === up.id; })[0];
       $('#upSummary').innerHTML = '<div class="notice info">' +
@@ -2685,6 +2679,81 @@
       alert('Could not upload.\n\n' + err.message);
       btn.disabled = false;
     }).then(function () { btn.textContent = 'Upload as draft'; });
+  }
+
+  /* Templates for the uploads above: the Payslip Generator's columns, with
+     the sheets' formulas (payslip-sheet/NoTax.gs, kosovo/SetupKosovo.gs) so
+     Net — and for XK the pension and tax — fill themselves in. */
+  var TEMPLATE_ROWS = 200;
+  function downloadPayslipTemplate(kind) {
+    var X = window.XlsxWriter, S = X.S, xk = kind === 'xk';
+    var head = xk
+      ? ['No', 'Employee', 'Tax status', 'Bank country', 'Bank / receiving account', 'Email', 'Employer', 'Net (EUR)',
+         'Gross salary (EUR)', 'Commission (EUR)', 'Commission details', 'Bonus (EUR)', 'Bonus description',
+         'Reimbursement, non-taxable (EUR)', 'Deduction / adjustment (EUR)', 'Deduction description', 'Total gross (EUR)',
+         'Employee contribution 5% (EUR)', 'Employer contribution 5% (EUR)', 'Taxable base (EUR)', 'Withholding tax (EUR)',
+         'Cost to employer (EUR)', 'Reference', 'Notes', 'Position', 'Employee Code', 'Personal No.', 'Payroll Period', 'Payout Date']
+      : ['No', 'Employee', 'Currency', 'Bank country', 'Bank / receiving account', 'Email', 'Net', 'Gross salary', 'Commission',
+         'Commission details', 'Bonus', 'Bonus description', 'Reimbursement', 'Deduction / adjustment', 'Deduction description',
+         'Reference', 'Notes', 'Position', 'Employee Code', 'Personal No.', 'Payroll Period', 'Payout Date'];
+    var C = {};
+    head.forEach(function (h, i) { C[h.replace(/ \(EUR\)$/, '')] = X.colName(i + 1); });
+    var calc = xk
+      ? ['Net', 'Total gross', 'Employee contribution 5%', 'Employer contribution 5%', 'Taxable base', 'Withholding tax',
+         'Cost to employer', 'Payroll Period', 'Payout Date']
+      : ['Net', 'Payroll Period', 'Payout Date'];
+    var formulas = function (r) {
+      var L = function (h) { return C[h] + r; };
+      var on = xk ? L('Gross salary') : L('Employee');
+      var blank = function (f) { return 'IF(' + on + '="","",' + f + ')'; };
+      var f = { 'Payroll Period': blank('$B$2'), 'Payout Date': blank('$E$2') };
+      if (!xk) {
+        f.Net = blank('ROUND(N(' + L('Gross salary') + ')+N(' + L('Commission') + ')+N(' + L('Bonus') + ')+N(' +
+          L('Reimbursement') + ')-N(' + L('Deduction / adjustment') + '),2)');
+        return f;
+      }
+      var TG = L('Total gross'), EE = L('Employee contribution 5%'), ER = L('Employer contribution 5%'),
+          TB = L('Taxable base'), TAX = L('Withholding tax'), RE = 'N(' + L('Reimbursement, non-taxable') + ')';
+      f['Total gross'] = blank('ROUND(N(' + L('Gross salary') + ')+N(' + L('Commission') + ')+N(' + L('Bonus') +
+        ')-N(' + L('Deduction / adjustment') + '),2)');
+      f['Employee contribution 5%'] = blank('IF(' + L('Tax status') + '="Foreign",0,ROUND(' + TG + '*0.05,2))');
+      f['Employer contribution 5%'] = blank('IF(' + L('Tax status') + '="Foreign",0,ROUND(' + TG + '*0.05,2))');
+      f['Taxable base'] = blank('ROUND(' + TG + '-' + EE + ',2)');
+      f['Withholding tax'] = blank('IF(' + L('Employer') + '="Secondary",ROUND(' + TB + '*0.1,2),IF(' + TB + '<=250,0,' +
+        'IF(' + TB + '<=450,ROUND((' + TB + '-250)*0.08,2),ROUND(16+(' + TB + '-450)*0.1,2))))');
+      f.Net = blank('ROUND(' + TG + '-' + EE + '-' + TAX + '+' + RE + ',2)');
+      f['Cost to employer'] = blank('ROUND(' + TG + '+' + ER + '+' + RE + ',2)');
+      return f;
+    };
+    var cell = function (v, s) { return { v: v, t: 's', s: s }; };
+    var rows = [
+      [cell(xk ? 'PAYROLL LIST (EUR)' : 'NO-TAX PAYROLL', S.TITLE)],
+      [cell('Payroll Period', S.BOLD), cell('', S.INPUT), cell(''), cell('Payout Date', S.BOLD), cell('', S.INPUT)],
+      [cell(xk
+        ? 'Fill in B2 (e.g. October 2026), E2 (YYYY-MM-DD) and the yellow columns, one row per person. Tax status: Local or ' +
+          'Foreign. Employer: Primary or Secondary. Grey columns calculate: 5% pension each side (none for Foreign); tax on ' +
+          'the taxable base — Secondary 10%, otherwise 0% to €250, 8% to €450, 10% above. Email must be the person\u2019s ' +
+          'TrinityHR login. Upload this file on Payroll → Payslip.'
+        : 'Fill in B2 (e.g. October 2026), E2 (YYYY-MM-DD) and the yellow columns, one row per person. Currency: EUR, PHP, ' +
+          'USD… (blank = the default chosen at upload). Net = gross + commission + bonus + reimbursement − deduction. ' +
+          'Commission details: one item per line. Email must be the person\u2019s TrinityHR login. Upload this file on ' +
+          'Payroll → Payslip.', S.NOTE)],
+      [],
+      head.map(function (h) {
+        var k = h.replace(/ \(EUR\)$/, '');
+        return cell(h, calc.indexOf(k) !== -1 ? S.HEAD_CALC : S.HEAD_INPUT);
+      })
+    ];
+    for (var r = 6; r < 6 + TEMPLATE_ROWS; r++) {
+      var f = formulas(r);
+      rows.push(head.map(function (h) {
+        var k = h.replace(/ \(EUR\)$/, '');
+        return f[k] ? { v: f[k], t: 'f', s: S.CALC } : cell('', S.INPUT);
+      }));
+    }
+    var widths = head.map(function (h) { return /details|description|Notes|Bank \/|Email|Employee$/.test(h) ? 28 : 14; });
+    var blob = X.build([{ name: xk ? 'XK Payroll' : 'No-Tax Payroll', cols: widths, rows: rows, freeze: { x: 2, y: 5 } }]);
+    X.download(blob, (xk ? 'XK Payroll' : 'No-Tax Payroll') + ' template.xlsx');
   }
 
   /* ---- settings ---- */
@@ -2764,6 +2833,8 @@
     $('#upFile').addEventListener('change', upRead);
     ['#upCompany', '#upAddress', '#upCurrency'].forEach(function (id) { $(id).addEventListener('change', upRead); });
     $('#upSave').addEventListener('click', upSave);
+    $('#upTplNoTax').addEventListener('click', function () { downloadPayslipTemplate('notax'); });
+    $('#upTplXk').addEventListener('click', function () { downloadPayslipTemplate('xk'); });
     $('#psSaveSettings').addEventListener('click', psSaveSettings);
     (function () {
       var cfg = Store.loadTrinity();

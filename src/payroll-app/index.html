@@ -467,13 +467,17 @@
       <div class="card-head">
         <h2>Upload Non-Trinity payslips</h2>
         <p class="hint" style="display:block">
-          The CSV from the Payslip Generator sheet, No-Tax Payroll or XK Payroll, as downloaded
-          (File &rarr; Download &rarr; CSV). Each row becomes a payslip for the TrinityHR account with
-          that email. Uploading the same payroll and payout date again replaces it.
+          Download a template, fill it in (Excel or Google Sheets) and upload it here as .xlsx or .csv.
+          The Payslip Generator sheet's CSV works too. Each row becomes a payslip for the TrinityHR
+          account with that email. Uploading the same payroll and payout date again replaces it.
         </p>
       </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 20px 12px">
+        <button class="btn ghost" id="upTplNoTax" type="button">Download No-Tax template (.xlsx)</button>
+        <button class="btn ghost" id="upTplXk" type="button">Download XK with tax template (.xlsx)</button>
+      </div>
       <div class="form-grid" style="padding:0 20px 8px">
-        <label>CSV file <input type="file" id="upFile" accept=".csv,text/csv"></label>
+        <label>Filled-in file (.xlsx or .csv) <input type="file" id="upFile" accept=".xlsx,.csv,text/csv"></label>
         <label>Company on the payslip <input type="text" id="upCompany" value="Ortus Strategy Branch in Kosovo"></label>
         <label>Company address (optional) <input type="text" id="upAddress" value=""></label>
         <label>Currency when blank (No-Tax) <input type="text" id="upCurrency" value="EUR" maxlength="3" style="text-transform:uppercase"></label>

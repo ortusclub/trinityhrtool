@@ -12,13 +12,7 @@ export async function payrollAdmin(): Promise<User | NextResponse> {
   return user;
 }
 
-export function notSetUp() {
-  return NextResponse.json(
-  {
-    setup: false,
-    error:
-      "Payslips aren't set up yet: run supabase/migrations/20261027_add_payslips.sql in Supabase once.",
-  },
-  { status: 503 },
-  );
+export function failed(e: unknown) {
+  const message = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e);
+  return NextResponse.json({ error: message }, { status: 500 });
 }

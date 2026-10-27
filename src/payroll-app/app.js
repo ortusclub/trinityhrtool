@@ -2297,6 +2297,139 @@
   }
 
   /* =====================================================================
+     PAYSLIP — release payslips to TrinityHR accounts and set what they show
+     The app runs inside TrinityHR, so these calls carry the admin's session.
+     ===================================================================== */
+  var ps = { settings: null, status: null, busy: false };
+
+  function psApi(path, method, body) {
+    return fetch('/api/payroll/' + path, {
+      method: method || 'GET',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (res.status === 503 && data.setup === false) { psShowSetup(data.error); throw new Error(data.error); }
+        if (!res.ok) throw new Error(data.error || 'TrinityHR answered ' + res.status);
+        return data;
+      });
+    });
+  }
+
+  function psShowSetup(msg) {
+    var el = $('#psSetup');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    ['#psPrepare', '#psPublish', '#psUnpublish', '#psSaveSettings'].forEach(function (id) { $(id).disabled = true; });
+  }
+
+  function renderPayslipTab() {
+    $('#psYear').textContent = state.year;
+    $('#psPeriod').innerHTML = state.periods.map(function (p) {
+      return '<option value="' + p.id + '">' + esc(window.PayrollTemplate.cutoffTitle(p)) +
+        ' (paid ' + esc(E.fmtShort(E.parseYmd(p.payoutDate))) + ')</option>';
+    }).join('');
+    $('#psPeriod').value = state.period.id;
+    psLoadStatus();
+    if (!ps.settings) {
+      psApi('payslip-settings').then(function (d) { ps.settings = d.settings; psRenderSettings(); }, function () {});
+    }
+  }
+
+  function psLoadStatus() {
+    var id = state.period.id;
+    $('#psStatus').textContent = 'Checking TrinityHR…';
+    $('#psUnmatched').classList.add('hidden');
+    return psApi('payslips?period=' + encodeURIComponent(id)).then(function (d) {
+      if (state.period.id !== id) return;
+      ps.status = d;
+      var n = d.payslips.length;
+      var when = function (t) { return new Date(t).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }); };
+      $('#psStatus').innerHTML = !n
+        ? 'Not prepared yet — ' + state.run.slips.length + ' payslip(s) on this cutoff here.'
+        : n + ' payslip(s) prepared ' + esc(when(d.prepared_at)) + ' · ' +
+          (d.published_at
+            ? '<span class="pill rf">Published ' + esc(when(d.published_at)) + '</span> employees can see them.'
+            : '<span class="pill spc">Not published</span> employees can’t see them yet.');
+      $('#psPublish').disabled = !n || !!d.published_at;
+      $('#psUnpublish').disabled = !d.published_at;
+      $('#psEmployee').innerHTML = n
+        ? d.payslips.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.name || x.email) + '</option>'; }).join('')
+        : '<option value="">—</option>';
+      psPreview();
+    }, function (err) {
+      $('#psStatus').textContent = 'Could not reach TrinityHR: ' + err.message;
+    });
+  }
+
+  function psPreview() {
+    var id = $('#psEmployee').value, frame = $('#psPreview');
+    frame.classList.toggle('hidden', !id);
+    if (id) frame.src = '/payslip-preview/' + encodeURIComponent(id) + '?t=' + Date.now();
+  }
+
+  function psPrepare() {
+    var per = state.period, slips = state.run.slips;
+    if (!slips.length) { alert('There are no payslips on this cutoff.'); return; }
+    var cut = window.PayrollTemplate.cutoffTitle(per);
+    if (ps.status && ps.status.published_at &&
+        !confirm(cut + ' is already published.\n\nPreparing it again replaces what employees see with the figures here now. Continue?')) return;
+    var noEmail = slips.filter(function (s) { return !String(s.employee.email || '').trim(); });
+    var byEmail = {};
+    slips.forEach(function (s) {
+      var e = String(s.employee.email || '').trim().toLowerCase();
+      if (e) byEmail[e] = s.employee.lastName + ', ' + s.employee.firstName;
+    });
+    var btn = $('#psPrepare');
+    btn.disabled = true; btn.textContent = 'Preparing…';
+    psApi('payslips', 'PUT', {
+      period: { id: per.id, start: per.start, end: per.end, payout: per.payoutDate },
+      payslips: slips.filter(function (s) { return String(s.employee.email || '').trim(); }).map(trinityPayload)
+    }).then(function (r) {
+      var missed = r.unmatched.map(function (e) { return (byEmail[e] || e) + ' — ' + e; })
+        .concat(noEmail.map(function (s) { return s.employee.lastName + ', ' + s.employee.firstName + ' — no email on file'; }));
+      var box = $('#psUnmatched');
+      box.innerHTML = missed.length
+        ? '<strong>' + missed.length + ' not prepared</strong> — no TrinityHR account with that work email:' +
+          '<ul>' + missed.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>'
+        : '';
+      box.classList.toggle('hidden', !missed.length);
+      return psLoadStatus().then(function () { if (missed.length) box.classList.remove('hidden'); });
+    }).catch(function (err) {
+      alert('Could not prepare payslips.\n\n' + err.message);
+    }).then(function () {
+      btn.disabled = false; btn.textContent = 'Prepare payslips';
+    });
+  }
+
+  function psRelease(publish) {
+    var per = state.period, n = ps.status ? ps.status.payslips.length : 0;
+    var cut = window.PayrollTemplate.cutoffTitle(per);
+    if (!confirm(publish
+      ? 'Publish ' + n + ' payslip(s) for ' + cut + '?\n\nEach person will see their own under My Workspace → Payslips.'
+      : 'Unpublish ' + cut + '?\n\nEmployees will no longer see these payslips.')) return;
+    psApi('payslips/release', 'POST', { period_id: per.id, published: publish })
+      .then(psLoadStatus, function (err) { alert('Could not ' + (publish ? 'publish' : 'unpublish') + '.\n\n' + err.message); });
+  }
+
+  function psRenderSettings() {
+    $$('[data-ps]').forEach(function (cb) { cb.checked = !!ps.settings[cb.dataset.ps]; });
+    $('#psNote').value = ps.settings.note || '';
+  }
+
+  function psSaveSettings() {
+    var next = { note: $('#psNote').value };
+    $$('[data-ps]').forEach(function (cb) { next[cb.dataset.ps] = cb.checked; });
+    var msg = $('#psSettingsMsg');
+    msg.textContent = 'Saving…';
+    psApi('payslip-settings', 'PUT', next).then(function (d) {
+      ps.settings = d.settings;
+      msg.textContent = 'Saved — every payslip now shows this.';
+      psPreview();
+    }, function (err) { msg.textContent = 'Not saved: ' + err.message; });
+  }
+
+  /* =====================================================================
      EVENT WIRING
      ===================================================================== */
   function switchTab(name) {
@@ -2307,6 +2440,7 @@
     if (name === 'employees') { renderEmployees(); renderItemsEditor(); renderLoansEditor(); }
     if (name === 'holidays') renderHolidays();
     if (name === 'yearend') renderYearEnd();
+    if (name === 'payslip') renderPayslipTab();
     if (name === 'settings') renderSettings();
   }
 
@@ -2333,6 +2467,19 @@
     $('#btnDeleteCutoffs').addEventListener('click', deleteAllCutoffs);
     $('#btnExportCsv').addEventListener('click', exportCsv);
     $('#btnSendTrinity').addEventListener('click', sendToTrinity);
+    $('#psPeriod').addEventListener('change', function () {
+      var id = this.value;
+      state.period = state.periods.filter(function (p) { return p.id === id; })[0];
+      $('#periodSelect').value = id;
+      state.foldNotice = null;
+      renderRun();
+      psLoadStatus();
+    });
+    $('#psPrepare').addEventListener('click', psPrepare);
+    $('#psPublish').addEventListener('click', function () { psRelease(true); });
+    $('#psUnpublish').addEventListener('click', function () { psRelease(false); });
+    $('#psEmployee').addEventListener('change', psPreview);
+    $('#psSaveSettings').addEventListener('click', psSaveSettings);
     (function () {
       var cfg = Store.loadTrinity();
       $('#trinityUrl').value = cfg.url || '';

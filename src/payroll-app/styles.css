@@ -163,6 +163,7 @@ select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1
   cursor: pointer;
 }
 .btn:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .btn.ghost { background: #fff; color: var(--text); border-color: var(--border-strong); }
 .btn.ghost:hover { background: #f2f5fa; }
 .btn.tiny { padding: 4px 9px; font-size: 12px; }

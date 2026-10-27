@@ -1,0 +1,518 @@
+/* =========================================================================
+   styles.css — Payroll PH
+   ========================================================================= */
+:root {
+  --bg: #f4f6fa;
+  --surface: #ffffff;
+  --border: #dde3ec;
+  --border-strong: #c3ccdb;
+  --text: #16202f;
+  --muted: #64748b;
+  --accent: #12557a;
+  --accent-soft: #e5f0f6;
+  --logo-bg: #ea580c;
+  --green: #0f7b52;
+  --green-soft: #e6f5ee;
+  --amber: #92600a;
+  --amber-soft: #fdf3dd;
+  --red: #a32020;
+  --red-soft: #fbeaea;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(16, 32, 47, .06), 0 6px 18px rgba(16, 32, 47, .05);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -.01em; }
+p { margin: 0; }
+
+/* ------------------------------- top bar ------------------------------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background: var(--logo-bg);
+  color: #fff;
+  font-size: 20px; font-weight: 700;
+}
+.topbar h1 { font-size: 17px; }
+.sub { color: var(--muted); font-size: 12.5px; }
+
+/* -------------------------------- tabs -------------------------------- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 11px 16px;
+  font: inherit;
+  font-weight: 550;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+main { padding: 22px 24px 60px; max-width: 1800px; margin: 0 auto; }
+.panel { display: flex; flex-direction: column; gap: 18px; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); font-weight: 400; }
+
+/* -------------------------------- cards -------------------------------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.card-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #fbfcfe, #f7f9fc);
+}
+.card-head.row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.card-head h2 { font-size: 14.5px; }
+.hint { color: var(--muted); font-size: 12.5px; margin-top: 4px; max-width: 92ch; }
+/* Explanatory notes are off until the header toggle turns them on. The warning
+   in Computation rules is deliberately not a .hint — it stays visible. */
+body:not(.notes-on) .hint { display: none; }
+/* Whole cards that are nothing but reference prose — hidden entirely rather
+   than left as an empty titled shell. */
+body:not(.notes-on) .note-card { display: none; }
+/* The toggle has to read as a control on a white bar, not blend into it. */
+#btnToggleNotes {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+#btnToggleNotes:hover { background: #d7e8f1; }
+body.notes-on #btnToggleNotes { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ------------------------------ period bar ------------------------------ */
+.period-bar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.field select { min-width: 340px; }
+.field.narrow select { min-width: 100px; }
+.period-meta { font-size: 12.5px; color: var(--muted); padding-bottom: 6px; }
+.period-meta strong { color: var(--text); }
+.period-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+/* ------------------------------- controls ------------------------------- */
+select, input[type="text"], input[type="number"], input[type="date"], input[type="time"] {
+  font: inherit;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 7px 9px;
+}
+select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+
+.btn {
+  appearance: none;
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: #fff; color: var(--text); border-color: var(--border-strong); }
+.btn.ghost:hover { background: #f2f5fa; }
+.btn.tiny { padding: 4px 9px; font-size: 12px; }
+.btn.danger { background: #fff; color: var(--red); border-color: #e5c0c0; }
+
+/* -------------------------------- stats -------------------------------- */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 16px;
+  box-shadow: var(--shadow);
+}
+.stat .k { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.stat .v { font-size: 21px; font-weight: 680; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.stat .n { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.stat.accent .v { color: var(--accent); }
+.stat.green .v { color: var(--green); }
+
+/* -------------------------------- tables -------------------------------- */
+/* Long tables scroll inside a window-high box, so the horizontal scrollbar
+   is always on screen and the sticky header and total row have something to
+   stick to. The scrollbars are drawn always-on: macOS otherwise hides them
+   until you are already scrolling. */
+.table-scroll { overflow: auto; max-height: calc(100vh - 120px); }
+.table-scroll::-webkit-scrollbar { width: 12px; height: 12px; }
+.table-scroll::-webkit-scrollbar-track { background: #eef1f5; }
+.table-scroll::-webkit-scrollbar-thumb { background: #b6bfcc; border-radius: 6px; border: 2px solid #eef1f5; }
+.table-scroll::-webkit-scrollbar-thumb:hover { background: #8f9aab; }
+.table-scroll::-webkit-scrollbar-corner { background: #eef1f5; }
+.top-scroll { overflow-x: auto; overflow-y: hidden; height: 14px; }
+.top-scroll > div { height: 1px; }
+.top-scroll::-webkit-scrollbar { height: 12px; }
+.top-scroll::-webkit-scrollbar-track { background: #eef1f5; }
+.top-scroll::-webkit-scrollbar-thumb { background: #b6bfcc; border-radius: 6px; border: 2px solid #eef1f5; }
+.top-scroll::-webkit-scrollbar-thumb:hover { background: #8f9aab; }
+table.grid { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+table.grid th, table.grid td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+table.grid thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: #f7f9fc;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  border-bottom: 1px solid var(--border-strong);
+}
+table.grid thead tr.group-head th {
+  top: 0;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+table.grid thead tr.group-head + tr th { top: 30px; }
+.grp-emp { background: #eef2f8 !important; }
+.grp-dtr { background: var(--amber-soft) !important; color: var(--amber) !important; }
+.grp-earn { background: var(--green-soft) !important; color: var(--green) !important; }
+.grp-ded { background: var(--red-soft) !important; color: var(--red) !important; }
+.grp-net { background: var(--accent-soft) !important; color: var(--accent) !important; }
+.grp-allow { background: #eef7ee !important; color: #2f6b34 !important; }
+.grp-mand { background: #f0eef8 !important; color: #4b3f86 !important; }
+
+table.grid td.num, table.grid th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.grid tbody tr:hover { background: #f9fbfd; }
+table.grid .sticky-col { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+table.grid thead .sticky-col { z-index: 3; background: #f7f9fc; }
+table.grid tbody tr:hover .sticky-col { background: #f9fbfd; }
+table.grid tfoot td {
+  font-weight: 680;
+  background: #f7f9fc;
+  border-top: 2px solid var(--border-strong);
+  position: sticky; bottom: 0;
+}
+table.grid.compact th, table.grid.compact td { padding: 6px 10px; }
+.strong { font-weight: 680; }
+.net { color: var(--green); font-weight: 680; }
+.zero { color: #b6bfcc; }
+
+/* timesheet inputs inside the grid */
+td.dtr { background: #fffdf6; }
+td.dtr input {
+  width: 56px;
+  padding: 4px 6px;
+  text-align: right;
+  border: 1px solid #e6dcc2;
+  border-radius: 5px;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+td.dtr input:disabled { background: #f1f3f7; border-color: var(--border); color: #b6bfcc; }
+td.dtr .pair { display: flex; gap: 4px; justify-content: flex-end; }
+td.dtr .pair input { width: 42px; }
+
+/* allowance + deduction inputs inside the run table */
+td.alw { background: #f5fbf5; }
+td.dedin { background: #fdf6f6; }
+td.alw input, td.dedin input {
+  padding: 4px 6px;
+  text-align: right;
+  border-radius: 5px;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+td.alw input { border: 1px solid #cfe3cf; }
+.auto-note { font-size: 10.5px; color: var(--accent); text-align: right; margin-top: 2px; font-variant-numeric: tabular-nums; }
+td.dedin input { border: 1px solid #e8cfcf; }
+
+/* editable monthly salary inside the run table */
+td.rate { background: #f6f9fd; }
+/* salary adjustment — amount plus the date it takes effect */
+td.adj { min-width: 132px; white-space: nowrap; background: #f6f9fd; }
+td.adj input {
+  display: block;
+  width: 118px;
+  padding: 4px 6px;
+  text-align: right;
+  border: 1px solid #cfdcea;
+  border-radius: 5px;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+}
+td.adj input[type="date"] { margin-top: 3px; font-size: 11.5px; text-align: left; }
+td.adj .muted { text-align: right; margin-top: 2px; }
+/* encoded but not paying yet, and encoded but unusable */
+td.adj.pending .muted { font-style: italic; }
+td.adj.warn input[type="date"] { border-color: #e0b4b4; background: #fdf6f6; }
+td.adj.warn .muted { color: var(--red); }
+td.rate input {
+  width: 108px;
+  padding: 4px 6px;
+  text-align: right;
+  border: 1px solid #cfdcea;
+  border-radius: 5px;
+  background: #fff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+td.rate .muted { text-align: right; margin-top: 2px; }
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+.pill.mgr { background: var(--accent-soft); color: var(--accent); }
+.pill.rf { background: #eef2f8; color: #475569; }
+.pill.reg { background: var(--red-soft); color: var(--red); }
+.pill.spc { background: var(--amber-soft); color: var(--amber); }
+
+/* ------------------------------- notices ------------------------------- */
+.notice {
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 13px;
+  border: 1px solid;
+}
+.notice.info { background: var(--accent-soft); border-color: #c5dbe8; color: #10405c; }
+.notice ul { margin: 6px 0 0; padding-left: 20px; }
+.notice.warn { background: var(--amber-soft); border-color: #ecd6a6; color: var(--amber); }
+#rosterNotice .notice { margin-bottom: 12px; }
+input.missing { border-color: #e5c0c0; background: var(--red-soft); }
+.pill.left { background: #eef0f3; color: #5b6575; }
+.import-companies { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 4px 0 16px; font-size: 13px; }
+
+/* --------------------------------- forms --------------------------------- */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  padding: 16px 18px;
+}
+.form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.form-grid input, .form-grid select { font-weight: 400; color: var(--text); }
+.checkline { display: flex; align-items: center; gap: 8px; padding: 12px 18px; font-weight: 550; }
+
+.contrib-preview { padding: 0 18px 16px; }
+.contrib-preview table { width: 100%; }
+
+/* --------------------------------- rules --------------------------------- */
+.rules { padding: 14px 18px 18px; font-size: 13px; }
+.rules ol { margin: 0; padding-left: 20px; }
+.rules li { margin-bottom: 7px; }
+.rules .warn {
+  margin-top: 14px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  background: var(--amber-soft);
+  border: 1px solid #ecd9a8;
+  color: #6b4708;
+}
+
+/* ------------------------------ items editor ------------------------------ */
+.item-block { border-bottom: 1px solid var(--border); padding: 14px 18px; }
+.item-block:last-child { border-bottom: 0; }
+.item-block h3 { font-size: 13px; margin-bottom: 8px; }
+.item-block h3 .muted { font-weight: 400; font-size: 12.5px; }
+.item-row { display: flex; gap: 8px; align-items: center; margin-bottom: 7px; flex-wrap: wrap; }
+.item-row input[type="text"] { flex: 1 1 240px; min-width: 180px; }
+.item-row input[type="number"] { width: 120px; text-align: right; }
+
+/* --------------------------------- modal --------------------------------- */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15, 25, 40, .55);
+  display: grid; place-items: start center;
+  padding: 30px 16px;
+  overflow: auto;
+  z-index: 50;
+}
+/* import mode chooser — each option states its consequence next to its button */
+.import-choice { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; }
+.import-choice + .import-choice { border-top: 1px solid var(--border); }
+.import-choice .btn { flex: 0 0 210px; white-space: normal; text-align: left; }
+.import-choice p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  width: min(760px, 100%);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+  overflow: hidden;
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--border);
+  background: #f7f9fc;
+}
+.modal-head > div { display: flex; gap: 8px; }
+
+/* --------------------------------- payslip ---------------------------------
+   Laid out to match the reference payslip: a bordered meta block of
+   label/value pairs, then Earning and Deduction side by side as equal-height
+   boxes whose totals sit flush at the bottom, then a Total Payments summary.
+   --------------------------------------------------------------------------- */
+.payslip {
+  --ps-accent: #6469ae;      /* the reference periwinkle, darkened to reach 5:1 on white */
+  --ps-rule: #c9c9c9;
+  --ps-band: #f1f1f1;
+  --ps-value: #8a8a8a;
+  padding: 26px 30px 30px;
+  color: var(--text);
+}
+.ps-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 20px;
+  margin-bottom: 18px;
+}
+.ps-head h3 { font-size: 15px; font-weight: 700; }
+.ps-head .co { font-size: 11.5px; color: var(--muted); margin-top: 3px; font-weight: 400; }
+.ps-head .ps-title { font-size: 17px; color: var(--ps-accent); font-weight: 400; white-space: nowrap; }
+
+/* Meta block — alternating label band / value rows, three columns. */
+.ps-meta { border: 1px solid var(--ps-rule); border-bottom: 0; font-size: 12.5px; }
+.ps-meta-row { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+.ps-meta-row.lbl { background: var(--ps-band); }
+.ps-meta-row > div {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--ps-rule);
+  /* Cutoff labels run long ("December 16, 2025 – December 31, 2025"), so these
+     wrap rather than truncate — an ellipsis here would hide real payroll data. */
+  overflow-wrap: anywhere;
+}
+.ps-meta-row.val > div { color: var(--ps-value); }
+
+/* Earning / Deduction boxes. Both stretch to the taller of the two and push
+   their total to the bottom edge, which is what squares them up visually. */
+.ps-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; align-items: stretch; }
+.ps-box {
+  border: 1px solid var(--ps-rule);
+  display: flex; flex-direction: column;
+  min-height: 230px;
+}
+.ps-box h4 {
+  margin: 0; padding: 6px 10px;
+  background: var(--ps-band);
+  border-bottom: 1px solid var(--ps-rule);
+  font-size: 13px; font-weight: 600; color: var(--ps-accent);
+}
+.ps-box .ps-body { padding: 4px 0; }
+.ps-line { display: flex; justify-content: space-between; gap: 12px; padding: 3px 10px; font-size: 12.5px; }
+.ps-line .lbl { color: #2b2b2b; }
+.ps-line .amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ps-line.sub .lbl { padding-left: 14px; }
+.ps-line.head { font-weight: 400; padding-top: 10px; }
+.ps-line.neg .amt { color: inherit; }
+.ps-line.total {
+  margin-top: auto;
+  border-top: 1px solid #6b6b6b;
+  padding-top: 5px; padding-bottom: 7px;
+  font-weight: 700;
+}
+
+/* Total Payments summary. */
+.ps-totals { margin-top: 26px; }
+.ps-totals h4 { margin: 0 0 6px; font-size: 15px; font-weight: 600; color: var(--ps-accent); }
+.ps-totals .ps-line { padding-left: 0; padding-right: 0; font-size: 13px; }
+/* `grand`, not `net` — a global `.net` rule paints the timesheet's net-pay
+   column green and would bleed into this row. */
+.ps-totals .ps-line.grand { font-weight: 700; color: var(--text); }
+.ps-totals .ps-line.grand .amt { color: var(--text); }
+.ps-foot { margin-top: 18px; font-size: 11.5px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px; }
+
+@media (max-width: 720px) {
+  .ps-cols { grid-template-columns: 1fr; gap: 16px; }
+  .ps-meta-row { grid-template-columns: 1fr; }
+  .ps-box { min-height: 0; }
+  .period-actions { margin-left: 0; width: 100%; }
+  .field select { min-width: 0; width: 100%; }
+}
+
+/* --------------------------------- print --------------------------------- */
+@media print {
+  body { background: #fff; }
+  .topbar, .tabs, main, .no-print { display: none !important; }
+  .modal-backdrop { position: static; padding: 0; background: #fff; overflow: visible; }
+  .modal { box-shadow: none; width: 100%; border-radius: 0; }
+}
+
+/* ------------------------------- sorting ------------------------------- */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--accent, #12557a); }
+th.sortable[data-dir="asc"]::after { content: " ▲"; font-size: 9px; }
+th.sortable[data-dir="desc"]::after { content: " ▼"; font-size: 9px; }
+.sort-select { font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px;
+  border: 1px solid #d1d5db; background: #fff; }
+
+/* ---------------------------- 13th month detail ---------------------------- */
+.modal.wide { width: min(1400px, 100%); }
+table.detail-13 { font-size: 12.5px; }
+table.detail-13 th { white-space: normal; }
+table.detail-13 th, table.detail-13 td { padding: 6px 8px; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: #f4f8fb; }
+.link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
+.link-btn:hover { text-decoration: underline; }
+tr.rate-change td { background: var(--amber-soft); }
+table.calc-summary { width: auto; min-width: 420px; }
+table.calc-summary tr.strong td { font-weight: 680; }
+table.calc-summary tr.net td { color: var(--green, #0f7b52); }

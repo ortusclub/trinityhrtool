@@ -32,6 +32,7 @@ import {
   Trophy,
   CalendarClock,
   ShieldAlert,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import type { UserRole } from "@/types/database";
@@ -97,6 +98,7 @@ const navSections: NavSection[] = [
       { label: "Manage Holidays", href: "/admin/holidays", icon: <CalendarHeart size={20} />, minRole: "hr_admin" },
       { label: "Leave Plans", href: "/admin/leave-plans", icon: <Palmtree size={20} />, minRole: "hr_admin" },
       { label: "Leave Credits", href: "/admin/leave-credits", icon: <Ticket size={20} />, minRole: "hr_admin" },
+      { label: "Payroll", href: "/admin/payroll", icon: <Wallet size={20} />, minRole: "hr_admin" },
       { label: "Anniversary Benefits", href: "/admin/settings/anniversary-benefits", icon: <Gift size={20} />, minRole: "super_admin" },
       { label: "Document Requests", href: "/admin/document-requests", icon: <FileText size={20} />, minRole: "hr_admin" },
       { label: "Bulk Import", href: "/admin/bulk-import", icon: <Upload size={20} />, minRole: "hr_admin", roles: ["hr_support", "hr_admin", "super_admin"] },

@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payroll PH — Semi-Monthly Payroll System</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">T</span>
+    <div>
+      <h1 id="companyName">Trinity Outsourcing Solutions Inc.</h1>
+      <p class="sub">Philippine semi-monthly payroll · paid every 10th &amp; 25th</p>
+    </div>
+  </div>
+  <button class="btn ghost" id="btnToggleNotes" type="button" aria-expanded="false">Show notes</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="run" type="button">Payroll Run</button>
+  <button class="tab" data-tab="employees" type="button">Employees</button>
+  <button class="tab" data-tab="holidays" type="button">Holidays</button>
+  <button class="tab" data-tab="yearend" type="button">13th Month &amp; Year-End</button>
+  <button class="tab" data-tab="settings" type="button">Settings &amp; Rules</button>
+</nav>
+
+<main>
+
+  <!-- ==================== PAYROLL RUN ==================== -->
+  <section class="panel" id="tab-run">
+
+    <div class="period-bar">
+      <div class="field">
+        <label for="periodSelect">Pay period</label>
+        <select id="periodSelect"></select>
+      </div>
+      <div class="field narrow">
+        <label for="yearSelect">Year</label>
+        <select id="yearSelect"></select>
+      </div>
+      <div class="period-meta" id="periodMeta"></div>
+      <div class="period-actions">
+        <button class="btn ghost" id="btnClearDtr" type="button">Clear timesheet</button>
+        <button class="btn ghost danger" id="btnDeleteCutoffs" type="button">Delete all cutoffs</button>
+        <button class="btn ghost" id="btnExportCsv" type="button">Export CSV</button>
+        <button class="btn ghost" id="btnSendTrinity" type="button" style="display:none">Send to TrinityHR</button>
+        <button class="btn ghost" id="btnImportTemplate" type="button">Import payroll files</button>
+        <input type="file" id="templateFile" accept=".xlsx,.xls,.csv" multiple style="display:none">
+        <button class="btn" id="btnDownloadTemplate" type="button">Download template (.xlsx)</button>
+      </div>
+    </div>
+
+    <div class="stat-row" id="statRow"></div>
+
+    <div id="rosterNotice"></div>
+    <div id="foldNotice"></div>
+    <div id="holidayNotice"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <h2>Timesheet &amp; computation</h2>
+          <select id="sort-run" class="sort-select" aria-label="Sort employees"></select>
+        </div>
+        <p class="hint">
+          <strong>Monthly rate</strong> and the timesheet cells are editable — every figure to the
+          right (daily/hourly rate, OT, SSS, PhilHealth, HDMF, withholding tax and net pay)
+          recomputes the moment you leave the cell.
+          Overtime is split by the three rates in the process document — <strong>1.25×</strong> regular
+          workday, <strong>1.69×</strong> rest day or special non-working, <strong>2.60×</strong> regular
+          holiday. <strong>ND hrs</strong> are hours worked 10:00PM–6:00AM, paid at hourly × 10%
+          (auto-suggested as OT hours beyond the first 3, editable). <strong>Transp. allow.</strong> is
+          entered directly as an amount. <strong>De minimis</strong> is not entered at all — it is
+          computed every cutoff as the standard ₱1,500, prorated by working days when someone's
+          start date falls inside the cutoff. Both are non-taxable. Managers are exempt from OT,
+          night differential and holiday premium.
+        </p>
+      </div>
+      <div class="table-scroll">
+        <table class="grid" id="runTable">
+          <thead>
+            <tr class="group-head">
+              <th colspan="3" class="grp-emp">Employee</th>
+              <th colspan="10" class="grp-dtr">Timesheet — hours &amp; days (editable)</th>
+              <th colspan="5" class="grp-allow">Allowances</th>
+              <th colspan="6" class="grp-earn">Earnings</th>
+              <th colspan="5" class="grp-mand">Mandatory contributions</th>
+              <th colspan="6" class="grp-ded">Tax &amp; deductions (editable)</th>
+              <th colspan="3" class="grp-net">Net</th>
+            </tr>
+            <tr>
+              <th class="sticky-col">Employee name</th>
+              <th class="num" title="Monthly basic rate — editable. The daily and hourly figures below it are derived from the rate actually being paid, which includes any salary adjustment in force.">Rate ✎</th>
+              <th class="num" title="Salary adjustment and the date it takes effect — both editable, and both saved onto the employee so they keep applying to later cutoffs. An increase adds to the monthly rate from that date; use a negative for a decrease. The line underneath says what this cutoff is actually doing with it.">Salary adj. ✎</th>
+
+              <th class="num" title="Days absent + unpaid leave">Abs</th>
+              <th class="num" title="Paid time off taken — paid, and drawn from leave credits">PTO</th>
+              <th class="num" title="Late, in minutes">Late min</th>
+              <th class="num" title="Undertime, in minutes">UT min</th>
+              <th class="num" title="Regular workday OT hours — 1.25x">OT 1.25</th>
+              <th class="num" title="Rest day / special non-working OT hours — 1.69x">OT 1.69</th>
+              <th class="num" title="Regular holiday OT hours — 2.60x">OT 2.60</th>
+              <th class="num" title="Night differential hours 10PM-6AM — hourly x 10%">ND hrs</th>
+              <th class="num" title="Rest day hours worked — 1.30x">Rest</th>
+              <th class="num" title="Regular / special holidays worked (days)">Hol R/S</th>
+
+              <th class="num" title="Travel allowance — enter the amount (non-taxable)">Travel allow.</th>
+              <th class="num" title="Travel allowance deductions — taken off the travel allowance">Travel ded.</th>
+              <th class="num" title="Ex milestones — company bonus. Non-taxable in the cutoff; shares the yearly exempt ceiling with 13th month and transport.">Ex milestones</th>
+              <th class="num" title="De minimis benefits (non-taxable). Computed automatically each cutoff — the standard amount, prorated by working days when a start date falls inside the cutoff. Not editable.">De minimis</th>
+              <th class="num" title="Quarterly bonus (taxable)">Q. bonus</th>
+
+              <th class="num">Regular pay</th>
+              <th class="num">OT pay</th>
+              <th class="num">ND pay</th>
+              <th class="num">Hol + rest</th>
+              <th class="num">Travel</th>
+              <th class="num strong">GROSS</th>
+
+              <th class="num">SSS EE</th>
+              <th class="num">PHIC EE</th>
+              <th class="num">HDMF EE</th>
+              <th class="num">After mand.</th>
+              <th class="num">Net taxable</th>
+
+              <th class="num">Tax</th>
+              <th class="num">Tendo</th>
+              <th class="num">SSS loan</th>
+              <th class="num">HMO</th>
+              <th class="num">Other</th>
+              <th class="num">Reimb.</th>
+
+              <th class="num strong">NET PAY</th>
+              <th>Remarks</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="runBody"></tbody>
+          <tfoot id="runFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Employer share &amp; company cost</h2>
+        <p class="hint">What the company remits and spends on top of gross pay for this payout.</p>
+      </div>
+      <div class="table-scroll">
+        <table class="grid compact" id="employerTable">
+          <thead>
+            <tr>
+              <th class="sticky-col">Employee</th>
+              <th class="num">SSS ER</th>
+              <th class="num">SSS EC</th>
+              <th class="num">PhilHealth ER</th>
+              <th class="num">HDMF ER</th>
+              <th class="num">Other company cost</th>
+              <th class="num">Total employer share</th>
+              <th class="num strong">Cost to company</th>
+            </tr>
+          </thead>
+          <tbody id="employerBody"></tbody>
+          <tfoot id="employerFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Loan ledger</h2>
+        <p class="hint">
+          Every active loan and where it stands on this payout. Amounts flow into the
+          <strong>SSS loan</strong> column for SSS salary loans and into <strong>Other</strong>
+          for HDMF and company loans, on top of anything typed manually.
+        </p>
+      </div>
+      <div class="table-scroll">
+        <table class="grid compact" id="loanTable">
+          <thead>
+            <tr>
+              <th class="sticky-col">Employee</th>
+              <th>Type</th>
+              <th>Reference</th>
+              <th class="num">Principal</th>
+              <th class="num">Per payout</th>
+              <th>Deducted on</th>
+              <th>Started</th>
+              <th class="num">Installment</th>
+              <th class="num">Due now</th>
+              <th class="num">Balance after</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="loanBody"></tbody>
+          <tfoot id="loanFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== EMPLOYEES ==================== -->
+  <section class="panel hidden" id="tab-employees">
+    <div class="card">
+      <div class="card-head row">
+        <div>
+          <h2>Employees</h2>
+          <p class="hint">
+            <strong>Import 201 File</strong> takes the HR system's "201 File Payroll" export as it
+            comes. People are matched by System ID, then Employee ID, then name: new people are
+            added and everyone else's names, contact details, dates, company, department,
+            position, bank and government numbers are updated from the file. Nobody is ever
+            removed — someone with a last day of work drops off the payroll run after that date.
+            Rates, classification, items, loans and timesheets are never touched by it.
+            The 201 File has no pay, so <strong>Download salary sheet</strong>, fill in Monthly
+            Rate and <strong>Import salaries</strong>. The masterlist export/restore is a full
+            backup of everything here.
+          </p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+          <select id="sort-emp" class="sort-select" aria-label="Sort employees"></select>
+          <button class="btn" id="btnImport201" type="button">Import 201 File</button>
+          <input type="file" id="file201" accept=".xlsx" style="display:none">
+          <button class="btn ghost" id="btnDownloadSalaries" type="button">Download salary sheet</button>
+          <button class="btn" id="btnImportSalaries" type="button">Import salaries</button>
+          <input type="file" id="salaryFile" accept=".xlsx" style="display:none">
+          <button class="btn ghost" id="btnExportMaster" type="button">Back up (.xlsx)</button>
+          <button class="btn ghost" id="btnImportMaster" type="button">Restore backup</button>
+          <input type="file" id="masterFile" accept=".xlsx" style="display:none">
+          <button class="btn ghost" id="btnAddEmployee" type="button">+ Add employee</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="grid" id="empTable">
+          <thead>
+            <tr>
+              <th class="sticky-col">Employee ID</th>
+              <th>Last name</th>
+              <th>First name</th>
+              <th>Status</th>
+              <th>Company</th>
+              <th>Start date</th>
+              <th>Last day</th>
+              <th>Email</th>
+              <th>Position</th>
+              <th>Department</th>
+              <th>Classification</th>
+              <th class="num">Monthly rate</th>
+              <th class="num">Daily</th>
+              <th class="num">Hourly</th>
+              <th>Other items</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="empBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Other expenses, allowances &amp; deductions</h2>
+        <p class="hint">
+          Add recurring items like Maxicare HMO, rice allowance, company loans or MP2.
+          Choose whether the item hits every payout, only the 1st–15th cutoff, or only the
+          16th–EOM cutoff.
+        </p>
+      </div>
+      <div id="itemsEditor"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Loans</h2>
+        <p class="hint">
+          Enter a loan once and it amortises itself — the installment number and remaining
+          balance are derived by counting payouts from the start date, so correcting a start
+          date reflows the whole schedule. Deduction stops automatically when the balance
+          reaches zero, and a final short installment is truncated to whatever is left.
+        </p>
+      </div>
+      <div id="loansEditor"></div>
+    </div>
+  </section>
+
+  <!-- ==================== HOLIDAYS ==================== -->
+  <section class="panel hidden" id="tab-holidays">
+    <div class="card">
+      <div class="card-head row">
+        <div>
+          <h2>Holiday calendar <span id="holidayYearLabel" class="muted"></span></h2>
+          <p class="hint">
+            Only holidays fixed by law are pre-loaded. Movable holidays — Holy Week,
+            Eid'l Fitr, Eid'l Adha, National Heroes Day and any special days added by
+            proclamation — need to be entered here once Malacañang releases the proclamation
+            for the year.
+          </p>
+        </div>
+        <button class="btn" id="btnAddHoliday" type="button">+ Add holiday</button>
+      </div>
+      <div class="table-scroll">
+        <table class="grid" id="holTable">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Day</th>
+              <th>Holiday</th>
+              <th>Type</th>
+              <th>Falls on a workday?</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="holBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card note-card">
+      <div class="card-head"><h2>How holidays are paid</h2></div>
+      <div class="rules">
+        <table class="grid compact">
+          <thead>
+            <tr><th>Scenario</th><th>Rank-and-file</th><th>Manager (exempt)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Regular holiday, not worked</td><td>Already covered by the monthly rate (261-day factor)</td><td>Same</td></tr>
+            <tr><td>Regular holiday, worked</td><td><strong>+100%</strong> of daily rate on top of basic (200% total)</td><td>No premium</td></tr>
+            <tr><td>Special non-working day, not worked</td><td>Paid — monthly-rate employees are not docked</td><td>Same</td></tr>
+            <tr><td>Special non-working day, worked</td><td><strong>+30%</strong> of daily rate (130% total)</td><td>No premium</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== YEAR-END ==================== -->
+  <section class="panel hidden" id="tab-yearend">
+    <div class="card">
+      <div class="card-head">
+        <h2>Posting</h2>
+        <p class="hint">
+          Choose which payout carries the 13th month pay and the annualised tax adjustment.
+          Leave either unset to compute and review the figures without posting them to a payslip.
+        </p>
+      </div>
+      <div class="form-grid">
+        <label>13th month pay posted on
+          <select data-setting="yearEnd.thirteenthMonthPeriodId" id="sel13th"></select></label>
+        <label>Tax refund / adjustment posted on
+          <select data-setting="yearEnd.taxRefundPeriodId" id="selRefund"></select></label>
+        <label>13th month divisor
+          <input type="number" step="1" data-setting="yearEnd.thirteenthMonthDivisor"></label>
+        <label>13th month tax-exempt ceiling
+          <input type="text" inputmode="decimal" data-money data-setting="yearEnd.thirteenthMonthExemption"></label>
+        <label>Year-end non-taxable bonus (full year)
+          <input type="text" inputmode="decimal" data-money data-setting="yearEnd.yearEndBonus"></label>
+        <label>Default annual leave credits (days)
+          <input type="number" step="1" data-setting="leave.annualCredits"></label>
+        <label>Leave monetization cutoff year
+          <input type="number" step="1" data-setting="leave.monetizeCutoffYear"></label>
+        <label>Max monetizable days &mdash; hired before cutoff
+          <input type="number" step="1" data-setting="leave.monetizeMaxDaysTenured"></label>
+        <label>Max monetizable days &mdash; hired cutoff year onward
+          <input type="number" step="1" data-setting="leave.monetizeMaxDaysRegular"></label>
+      </div>
+    </div>
+
+    <div class="stat-row" id="yearEndStats"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>13th month pay &amp; annualised tax <span class="muted" id="yearEndYear"></span></h2>
+        <p class="hint">
+          13th month is total basic salary earned in the year divided by 12 — absences reduce it,
+          paid leave does not. The adjustment compares tax actually withheld across the year against
+          the tax due on the annualised income: a positive figure is refundable to the employee,
+          a negative one is still collectible.
+        </p>
+      </div>
+      <div class="table-scroll">
+        <table class="grid compact" id="yearEndTable">
+          <thead>
+            <tr>
+              <th class="sticky-col">Employee</th>
+              <th class="num">Monthly rate</th>
+              <th class="num">Payouts</th>
+              <th class="num" title="Basic salary before absences, late and undertime, for cutoffs worked January 1 – December 31">Gross basic (year)</th>
+              <th class="num" title="Gross basic for the year ÷ 12">13th month</th>
+              <th class="num" title="Instalments already paid in the year's payroll">Paid so far</th>
+              <th class="num strong" title="Still to pay — what the 13th-month payout posts">Balance</th>
+              <th class="num" title="Paid with the 13th month: the full amount for a full year, pro rata by months worked. Non-taxable, outside the ceiling.">Year-end bonus</th>
+              <th class="num" title="Transportation allowance paid in the year — shares the exempt ceiling">Transport allow.</th>
+              <th class="num" title="Ex milestones (company bonus) paid in the year — shares the exempt ceiling">Ex milestones</th>
+              <th class="num" title="13th month + transport + ex milestones, up to the yearly ceiling">Exempt</th>
+              <th class="num" title="What 13th month + transport + ex milestones pass the ceiling by — taken off the 13th month">Taxable</th>
+              <th class="num">YTD taxable income</th>
+              <th class="num">Annual taxable</th>
+              <th class="num">Annual tax due</th>
+              <th class="num">Tax withheld</th>
+              <th class="num strong">Refund / (Due)</th>
+            </tr>
+          </thead>
+          <tbody id="yearEndBody"></tbody>
+          <tfoot id="yearEndFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Leave ledger</h2>
+        <p class="hint">Paid time off taken across the year against each employee's credits.
+          Unused credits may be monetized up to a cap that depends on hire date &mdash;
+          set the cutoff year and the two caps under <strong>Posting</strong> above.</p>
+      </div>
+      <div class="table-scroll">
+        <table class="grid compact" id="leaveTable">
+          <thead>
+            <tr>
+              <th class="sticky-col">Employee</th>
+              <th class="num">Hired</th>
+              <th class="num">Credits</th>
+              <th class="num">PTO used</th>
+              <th class="num">Remaining</th>
+              <th class="num">Max monetizable</th>
+              <th class="num">Days to monetize</th>
+              <th class="num">Cash value</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="leaveBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SETTINGS ==================== -->
+  <section class="panel hidden" id="tab-settings">
+
+    <div class="card">
+      <div class="card-head"><h2>Company</h2></div>
+      <div class="form-grid">
+        <label>Company name <input type="text" data-setting="company.name"></label>
+        <label>Address <input type="text" data-setting="company.address"></label>
+        <label>TIN <input type="text" data-setting="company.tin"></label>
+        <label>Branch <input type="text" data-setting="company.branch"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Work schedule &amp; rate basis</h2>
+        <p class="hint">Monday to Friday, 10:00AM–7:00PM with a 1-hour unpaid meal break = 8 paid hours per day.</p>
+      </div>
+      <div class="form-grid">
+        <label>Shift start <input type="time" data-setting="schedule.shiftStart"></label>
+        <label>Shift end <input type="time" data-setting="schedule.shiftEnd"></label>
+        <label>Paid hours per day <input type="number" step="0.5" data-setting="schedule.hoursPerDay"></label>
+        <label>Overtime starts after <input type="time" data-setting="schedule.otStart"></label>
+        <label>Night differential from <input type="time" data-setting="schedule.ndStart"></label>
+        <label>Night differential until <input type="time" data-setting="schedule.ndEnd"></label>
+        <label>Day factor (monthly ×12 ÷ factor = daily)
+          <input type="number" step="1" data-setting="dayFactor"></label>
+        <label>SSS deducted on
+          <select data-setting="contributionSchedule.sss">
+            <option value="1">Pay period 1 — paid the 10th (cutoff 16–EOM)</option>
+            <option value="2">Pay period 2 — paid the 25th (cutoff 1–15)</option>
+            <option value="split">Split across both payouts</option>
+          </select>
+        </label>
+        <label>PhilHealth deducted on
+          <select data-setting="contributionSchedule.phic">
+            <option value="1">Pay period 1 — paid the 10th (cutoff 16–EOM)</option>
+            <option value="2">Pay period 2 — paid the 25th (cutoff 1–15)</option>
+            <option value="split">Split across both payouts</option>
+          </select>
+        </label>
+        <label>HDMF deducted on
+          <select data-setting="contributionSchedule.hdmf">
+            <option value="1">Pay period 1 — paid the 10th (cutoff 16–EOM)</option>
+            <option value="2">Pay period 2 — paid the 25th (cutoff 1–15)</option>
+            <option value="split">Split across both payouts</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Premium multipliers</h2></div>
+      <div class="form-grid">
+        <label>Overtime — regular workday <input type="number" step="0.01" data-setting="premium.ot"></label>
+        <label>Overtime — rest day / special non-working <input type="number" step="0.01" data-setting="premium.otRestDaySpecial"></label>
+        <label>Overtime — regular holiday <input type="number" step="0.01" data-setting="premium.otRegHoliday"></label>
+        <label>Night differential premium (on base hourly) <input type="number" step="0.01" data-setting="premium.nd"></label>
+        <label>Standard de minimis per cutoff <input type="text" inputmode="decimal" data-money data-setting="defaultDeMinimis"></label>
+        <label>Rest day work <input type="number" step="0.01" data-setting="premium.restDay"></label>
+        <label>Regular holiday worked (extra) <input type="number" step="0.01" data-setting="premium.regHolidayWorkedExtra"></label>
+        <label>Special holiday worked (extra) <input type="number" step="0.01" data-setting="premium.specialHolidayWorkedExtra"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Government contributions</h2>
+        <p class="hint">Update these when SSS, PhilHealth or HDMF issue a new circular.</p>
+      </div>
+      <div class="form-grid">
+        <label>PhilHealth employee rate <input type="number" step="0.001" data-setting="phic.eeRate"></label>
+        <label>PhilHealth employer rate <input type="number" step="0.001" data-setting="phic.erRate"></label>
+        <label>PhilHealth salary floor <input type="text" inputmode="decimal" data-money data-setting="phic.floor"></label>
+        <label>PhilHealth salary ceiling <input type="text" inputmode="decimal" data-money data-setting="phic.ceiling"></label>
+        <label>HDMF employee share (flat) <input type="text" inputmode="decimal" data-money data-setting="hdmf.flatEE"></label>
+        <label>HDMF employer share (flat) <input type="text" inputmode="decimal" data-money data-setting="hdmf.flatER"></label>
+      </div>
+      <p class="hint" style="padding:0 18px 4px">
+        SSS is read from the 61-bracket 2026 contribution table (SSS Circular 2024-006) built into
+        <code>data.js</code>, taken from the <em>SSS Table</em> tab of Payroll Process.xlsx. The employee
+        share is Regular EE + MPF EE, topping out at ₱1,750 for compensation of ₱34,750 and above.
+      </p>
+      <label class="checkline">
+        <input type="checkbox" data-setting="replicateSheetFormula">
+        Replicate the workbook's formula exactly — income after mandatories = gross − (PhilHealth + HDMF).
+        On pay period 1 this matches, since SSS is not due; on pay period 2 it would leave SSS undeducted.
+      </label>
+      <div class="contrib-preview" id="contribPreview"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Withholding tax</h2>
+        <p class="hint">BIR semi-monthly table under the TRAIN law.</p>
+      </div>
+      <label class="checkline">
+        <input type="checkbox" data-setting="applyWithholdingTax"> Compute withholding tax
+      </label>
+      <div class="table-scroll">
+        <table class="grid compact" id="taxTable">
+          <thead>
+            <tr><th>Taxable income (semi-monthly)</th><th class="num">Base tax</th><th class="num">Rate on excess</th></tr>
+          </thead>
+          <tbody id="taxBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card note-card">
+      <div class="card-head"><h2>Computation rules &amp; assumptions</h2></div>
+      <div class="rules">
+        <ol>
+          <li><strong>Pay periods.</strong> The 25th pays the 1st–15th of the same month. The 10th pays the 16th to the end of the previous month.</li>
+          <li><strong>Schedule.</strong> Monday–Friday, 10:00AM–7:00PM, 1-hour unpaid break, 8 paid hours a day. Saturday and Sunday are rest days.</li>
+          <li><strong>Overtime.</strong> Credited for hours worked after 7:00PM. Regular workday 1.25×; rest day or special non-working day 1.69× (130% base × 130% OT premium); regular holiday 2.60× (200% base × 130% OT premium).</li>
+          <li><strong>Night differential.</strong> Hourly rate × 10% × night hours worked, for hours between 10:00PM and 6:00AM. The 10% is computed on the <em>base</em> hourly rate, per the process document.</li>
+          <li><strong>Transportation allowance.</strong> Entered directly as an amount per cutoff, non-taxable.</li>
+          <li><strong>De minimis.</strong> Computed automatically, never encoded: the standard ₱1,500 per cutoff, non-taxable, prorated by working days when a start date falls inside the cutoff. Someone hired after the cutoff closed gets none. Change the standard amount in Settings.</li>
+          <li><strong>Contributions.</strong> SSS from the 2026 table (Regular EE + MPF EE); PhilHealth 2.5% employee and 2.5% employer; HDMF a flat ₱200 each side. Each is deducted whole on its own payout: <strong>SSS on the 25th (pay period 2)</strong>, <strong>PhilHealth and HDMF on the 10th (pay period 1)</strong>.</li>
+          <li><strong>Managers.</strong> Treated as managerial staff exempt under Art. 82 of the Labor Code — no overtime, night differential, rest day or holiday premium.</li>
+          <li><strong>Daily rate.</strong> Monthly × 12 ÷ 261 working days (Mon–Fri with regular holidays paid). Change the factor above if your company uses 313, 314 or 365.</li>
+          <li><strong>Contributions.</strong> SSS, PhilHealth and HDMF are monthly amounts based on the monthly basic rate, split in half across the two payouts by default.</li>
+          <li><strong>Tax.</strong> Withholding is computed per payout on gross taxable pay less the employee's statutory contributions. Non-taxable allowances (rice, de minimis) are excluded.</li>
+          <li><strong>Not included.</strong> 13th month pay, final pay, leave conversion and the BIR 2316 annualisation are outside this tool's scope.</li>
+        </ol>
+        <p class="warn">
+          <strong>Check before live use.</strong> Statutory rates change by circular. Verify the SSS
+          contribution schedule, the PhilHealth premium rate and the HDMF ceiling against the
+          current issuances, and have the setup reviewed by your accountant before running real payroll.
+        </p>
+      </div>
+    </div>
+      <div class="card" style="display:none">
+      <div class="card-head">
+        <h2>TrinityHR</h2>
+        <p class="hint" style="display:block">
+          "Send to TrinityHR" on the Payroll Run tab puts each person's payslip for the cutoff
+          into their TrinityHR account (matched by work email), under My Payslips. The key comes
+          from TrinityHR's PAYSLIP_IMPORT_SECRET. It is kept in this browser only — never in
+          backups or exports — and can only send payslips, not read anything back.
+        </p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 18px">
+        <label>TrinityHR address
+          <input type="text" id="trinityUrl" placeholder="https://trinityhr.vercel.app"></label>
+        <label>Payslip key
+          <input type="password" id="trinityKey" autocomplete="off" placeholder="paste the key"></label>
+      </div>
+    </div>
+</section>
+</main>
+
+<!-- ==================== PAYSLIP MODAL ==================== -->
+<div class="modal-backdrop hidden" id="importModeModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="importModeTitle">Import masterlist</h2>
+      <button class="btn ghost" id="btnCancelImport" type="button">Cancel</button>
+    </div>
+    <div id="importModeBody" style="padding:18px"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="thirteenthModal">
+  <div class="modal wide">
+    <div class="modal-head no-print">
+      <h2 id="thirteenthTitle">13th month</h2>
+      <div>
+        <button class="btn ghost" id="btnPrintThirteenth" type="button">Print</button>
+        <button class="btn ghost" id="btnCloseThirteenth" type="button">Close</button>
+      </div>
+    </div>
+    <div id="thirteenthBody" style="padding:18px"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="payslipModal">
+  <div class="modal">
+    <div class="modal-head no-print">
+      <h2>Payslip</h2>
+      <div>
+        <button class="btn ghost" id="btnPrintPayslip" type="button">Print</button>
+        <button class="btn ghost" id="btnClosePayslip" type="button">Close</button>
+      </div>
+    </div>
+    <div id="payslipBody"></div>
+  </div>
+</div>
+
+<script src="xlsx.js"></script>
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script src="template.js"></script>
+<script src="masterlist.js"></script>
+<script src="hr201.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

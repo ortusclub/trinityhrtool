@@ -206,7 +206,7 @@
         '<button class="btn ghost tiny" id="btnUnpost" type="button">Recalculate this cutoff instead</button></div>';
     }
     if (noRate.length) {
-      html += '<div class="notice warn"><strong>' + noRate.length + ' employee' +
+      html += '<div class="notice warn note-card"><strong>' + noRate.length + ' employee' +
         (noRate.length === 1 ? ' has' : 's have') + ' no monthly rate</strong> and ' +
         (noRate.length === 1 ? 'is' : 'are') + ' left off this cutoff. Import salaries on the ' +
         'Employees tab, or import a payroll file — a blank rate is filled from it.<ul>' + noRate.slice(0, 12).map(function (e) {
@@ -222,7 +222,7 @@
       return e.dateHired && e.dateHired > p.start && e.dateHired <= p.end;
     });
     if (leaving.length) {
-      html += '<div class="notice info"><strong>Last day of work inside this cutoff</strong> — ' +
+      html += '<div class="notice info note-card"><strong>Last day of work inside this cutoff</strong> — ' +
         'basic pay and de minimis are prorated to the days on staff.<ul>' +
         leaving.map(function (e) {
           return '<li>' + esc((e.lastName || '') + ', ' + (e.firstName || '')) +
@@ -230,7 +230,7 @@
         }).join('') + '</ul></div>';
     }
     if (joining.length) {
-      html += '<div class="notice info"><strong>Started inside this cutoff</strong> — ' +
+      html += '<div class="notice info note-card"><strong>Started inside this cutoff</strong> — ' +
         'basic pay and de minimis are prorated to the days on staff.<ul>' +
         joining.map(function (e) {
           return '<li>' + esc((e.lastName || '') + ', ' + (e.firstName || '')) +
@@ -239,10 +239,10 @@
     }
     var off = state.employees.length - state.runEmployees.length - noRate.length;
     if (off && postedHere) {
-      html += '<p class="hint" style="display:block;margin:0 0 12px">' + off + ' employee' +
+      html += '<p class="hint" style="margin:0 0 12px">' + off + ' employee' +
         (off === 1 ? ' is' : 's are') + ' on the roster but not in this cutoff\'s payroll file.</p>';
     } else if (off) {
-      html += '<p class="hint" style="display:block;margin:0 0 12px">' + off + ' employee' +
+      html += '<p class="hint" style="margin:0 0 12px">' + off + ' employee' +
         (off === 1 ? ' is' : 's are') + ' not on this cutoff (started after it or left before it).</p>';
     }
     el.innerHTML = html;

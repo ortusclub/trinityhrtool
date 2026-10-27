@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { ComingSoonGate } from "@/components/layout/coming-soon-gate";
 import { BrandBackdrop } from "@/components/brand/brand-backdrop";
+import { anyReleased } from "@/lib/payslips-store";
 
 export default async function DashboardLayout({
   children,
@@ -17,7 +18,7 @@ export default async function DashboardLayout({
     { data: comingSoon },
     { data: orderRow },
     { count: pendingPeerCount },
-    { count: releasedPayslips },
+    releasedPayslips,
   ] = await Promise.all([
       supabase
         .from("system_settings")
@@ -34,10 +35,7 @@ export default async function DashboardLayout({
         .select("id", { count: "exact", head: true })
         .eq("reviewer_id", user.id)
         .eq("status", "pending"),
-      supabase
-        .from("payslip_releases")
-        .select("period_id", { count: "exact", head: true })
-        .not("published_at", "is", null),
+      anyReleased(),
     ]);
 
   const comingSoonRoutes = [

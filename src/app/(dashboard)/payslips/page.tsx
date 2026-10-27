@@ -1,30 +1,12 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/helpers";
-import { createClient } from "@/lib/supabase/server";
-import type { Payslip } from "@/types/database";
 import { formatDate } from "@/lib/utils";
-import { cutoffLabel, peso } from "@/components/payslips/payslip-view";
+import { releasedSlipsFor } from "@/lib/payslips-store";
+import { money } from "@/components/payslips/payslip-view";
 
 export default async function PayslipsPage() {
   const user = await getCurrentUser();
-  const supabase = await createClient();
-
-  const [{ data }, { data: releases }] = await Promise.all([
-    supabase
-      .from("payslips")
-      .select("id, period_id, cutoff_start, cutoff_end, payout_date, gross_pay, net_pay")
-      .eq("employee_id", user.id)
-      .order("payout_date", { ascending: false }),
-    supabase.from("payslip_releases").select("period_id").not("published_at", "is", null),
-  ]);
-
-  // Released cutoffs only. RLS already does this for employees; admins can
-  // read drafts, which don't belong on their own list.
-  const released = new Set((releases ?? []).map((r) => r.period_id));
-  const payslips = ((data ?? []) as Pick<
-    Payslip,
-    "id" | "period_id" | "cutoff_start" | "cutoff_end" | "payout_date" | "gross_pay" | "net_pay"
-  >[]).filter((p) => released.has(p.period_id));
+  const payslips = await releasedSlipsFor(user.id).catch(() => []);
 
   return (
     <div className="space-y-8">
@@ -44,17 +26,17 @@ export default async function PayslipsPage() {
         <div className="rounded-xl border border-gray-200 bg-white">
           {payslips.map((p) => (
             <Link
-              key={p.id}
-              href={`/payslips/${p.id}`}
+              key={p.batch_id}
+              href={`/payslips/${p.batch_id}`}
               className="flex items-center justify-between gap-4 border-b border-gray-100 p-5 last:border-b-0 hover:bg-gray-50"
             >
               <div className="min-w-0 space-y-1">
-                <p className="font-medium text-gray-900">{cutoffLabel(p)}</p>
+                <p className="font-medium text-gray-900">{p.period_label}</p>
                 <p className="text-xs text-gray-500">Paid {formatDate(p.payout_date)}</p>
               </div>
               <div className="text-right">
-                <p className="font-medium tabular-nums text-gray-900">{peso(p.net_pay)}</p>
-                <p className="text-xs text-gray-500">net · gross {peso(p.gross_pay)}</p>
+                <p className="font-medium tabular-nums text-gray-900">{money(p.net_pay, p.currency)}</p>
+                <p className="text-xs text-gray-500">net · gross {money(p.gross_pay, p.currency)}</p>
               </div>
             </Link>
           ))}

@@ -1,5 +1,5 @@
-// What every payslip shows, set on Admin → Payroll → Payslip and stored in
-// payslip_settings. Applied when a payslip is displayed, so a change reaches
+// What every payslip shows, set on Admin → Payroll → Payslip and stored
+// with the payslips (lib/payslips-store.ts). Applied when a payslip is displayed, so a change reaches
 // every payslip already released.
 export interface PayslipSettings {
   showCompanyAddress: boolean;
@@ -13,6 +13,8 @@ export interface PayslipSettings {
   showLineNotes: boolean;
   showNetTaxable: boolean;
   showRemarks: boolean;
+  /** Reference, personal no., employer contribution, tax status. */
+  showExtraDetails: boolean;
   /** Printed at the bottom of every payslip. */
   note: string;
 }
@@ -27,6 +29,7 @@ export const DEFAULT_PAYSLIP_SETTINGS: PayslipSettings = {
   showLineNotes: true,
   showNetTaxable: true,
   showRemarks: true,
+  showExtraDetails: true,
   note: "",
 };
 
@@ -44,9 +47,4 @@ export function readPayslipSettings(saved: unknown): PayslipSettings {
     }
   }
   return out;
-}
-
-/** True when the payslip tables haven't been created yet. */
-export function isMissingTable(error: { code?: string } | null): boolean {
-  return error?.code === "42P01" || error?.code === "PGRST205";
 }

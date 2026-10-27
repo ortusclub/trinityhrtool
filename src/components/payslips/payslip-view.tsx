@@ -1,18 +1,16 @@
-import type { Payslip, PayslipLine } from "@/types/database";
+import type { PayslipLine, StoredPayslip } from "@/types/database";
 import type { PayslipSettings } from "@/lib/payslips";
 import { formatDate } from "@/lib/utils";
 
-/** Peso amounts, two decimals. */
-export function peso(n: number | string | null | undefined): string {
+/** An amount in the payslip's currency, two decimals: ₱1,234.50, €980.00. */
+export function money(n: number | string | null | undefined, currency = "PHP"): string {
   const v = Number(n);
-  return "₱" + (Number.isFinite(v) ? v : 0).toLocaleString("en-PH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-export function cutoffLabel(p: Pick<Payslip, "cutoff_start" | "cutoff_end">): string {
-  return `${formatDate(p.cutoff_start)} – ${formatDate(p.cutoff_end)}`;
+  const value = Number.isFinite(v) ? v : 0;
+  try {
+    return value.toLocaleString("en-PH", { style: "currency", currency, currencyDisplay: "narrowSymbol" });
+  } catch {
+    return `${currency} ${value.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
 }
 
 /**
@@ -26,11 +24,12 @@ export function PayslipView({
   employeeName,
   settings,
 }: {
-  payslip: Payslip;
+  payslip: StoredPayslip;
   employeeName: string;
   settings: PayslipSettings;
 }) {
-  const { lines } = payslip;
+  const { lines, currency } = payslip;
+  const fmt = (n: number | null | undefined) => money(n, currency);
   const company = lines.company ?? {};
   const visible = (rows: PayslipLine[]) =>
     rows.filter((r) => {
@@ -59,28 +58,36 @@ export function PayslipView({
         <Field label="Employee" value={employeeName} />
         {settings.showPosition && <Field label="Position" value={lines.employee?.position || "—"} />}
         {settings.showEmployeeCode && <Field label="Employee code" value={lines.employee?.code || "—"} />}
-        <Field label="Payroll period" value={cutoffLabel(payslip)} />
+        <Field label="Payroll period" value={payslip.period_label} />
         <Field label="Payout date" value={formatDate(payslip.payout_date)} />
-        {settings.showBranch && <Field label="Branch" value={lines.employee?.branch || "—"} />}
+        {settings.showBranch && lines.employee?.branch && <Field label="Branch" value={lines.employee.branch} />}
+        {settings.showExtraDetails && lines.employee?.personal_no && (
+          <Field label="Personal no." value={lines.employee.personal_no} />
+        )}
       </dl>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <LineTable title="Earnings" rows={visible(lines.earnings)} total={payslip.gross_pay} totalLabel="Total earnings" />
-        <LineTable title="Deductions" rows={visible(lines.deductions)} total={payslip.total_deductions} totalLabel="Total deductions" />
+        <LineTable title="Earnings" rows={visible(lines.earnings)} total={payslip.gross_pay} totalLabel="Total earnings" fmt={fmt} />
+        <LineTable title="Deductions" rows={visible(lines.deductions)} total={payslip.total_deductions} totalLabel="Total deductions" fmt={fmt} />
       </div>
 
       <div className="mt-6 flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
         <span className="font-medium text-gray-700">Net pay</span>
-        <span className="font-display text-xl text-gray-900">{peso(payslip.net_pay)}</span>
+        <span className="font-display text-xl text-gray-900">{fmt(payslip.net_pay)}</span>
       </div>
 
       {((settings.showNetTaxable && typeof lines.net_taxable === "number") ||
         (settings.showRemarks && payslip.remarks)) && (
         <p className="mt-4 text-xs text-gray-500">
           {settings.showNetTaxable && typeof lines.net_taxable === "number" && (
-            <>Net taxable amount: {peso(lines.net_taxable)}. </>
+            <>Net taxable amount: {fmt(lines.net_taxable)}. </>
           )}
           {settings.showRemarks && payslip.remarks && <>Remarks: {payslip.remarks}</>}
+        </p>
+      )}
+      {settings.showExtraDetails && (lines.info?.length ?? 0) > 0 && (
+        <p className="mt-2 text-xs text-gray-500">
+          {lines.info!.map((i) => `${i.label}: ${i.value}`).join(" · ")}
         </p>
       )}
       {settings.note.trim() && (
@@ -105,11 +112,13 @@ function LineTable({
   rows,
   total,
   totalLabel,
+  fmt,
 }: {
   title: string;
   rows: PayslipLine[];
   total: number;
   totalLabel: string;
+  fmt: (n: number | null | undefined) => string;
 }) {
   return (
     <div>
@@ -130,13 +139,13 @@ function LineTable({
                 {r.label}
               </td>
               <td className="py-1.5 text-right tabular-nums text-gray-900">
-                {r.amount === null ? "" : peso(r.amount)}
+                {r.amount === null ? "" : fmt(r.amount)}
               </td>
             </tr>
           ))}
           <tr>
             <td className="pt-2 font-medium text-gray-900">{totalLabel}</td>
-            <td className="pt-2 text-right font-medium tabular-nums text-gray-900">{peso(total)}</td>
+            <td className="pt-2 text-right font-medium tabular-nums text-gray-900">{fmt(total)}</td>
           </tr>
         </tbody>
       </table>

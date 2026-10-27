@@ -440,11 +440,9 @@
 
   <!-- ==================== PAYSLIP ==================== -->
   <section class="panel hidden" id="tab-payslip">
-    <div class="notice warn hidden" id="psSetup"></div>
-
     <div class="card">
       <div class="card-head">
-        <h2>Release payslips</h2>
+        <h2>Trinity payroll</h2>
         <p class="hint" style="display:block">
           Prepare saves the cutoff's payslips to TrinityHR, matched to each account by work email.
           Nobody sees them until you publish; each person then finds their own under
@@ -467,10 +465,43 @@
 
     <div class="card">
       <div class="card-head">
+        <h2>Upload Non-Trinity payslips</h2>
+        <p class="hint" style="display:block">
+          The CSV from the Payslip Generator sheet, No-Tax Payroll or XK Payroll, as downloaded
+          (File &rarr; Download &rarr; CSV). Each row becomes a payslip for the TrinityHR account with
+          that email. Uploading the same payroll and payout date again replaces it.
+        </p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 8px">
+        <label>CSV file <input type="file" id="upFile" accept=".csv,text/csv"></label>
+        <label>Company on the payslip <input type="text" id="upCompany" value="Ortus Strategy Branch in Kosovo"></label>
+        <label>Company address (optional) <input type="text" id="upAddress" value=""></label>
+        <label>Currency when blank (No-Tax) <input type="text" id="upCurrency" value="EUR" maxlength="3" style="text-transform:uppercase"></label>
+      </div>
+      <div id="upSummary" style="padding:0 20px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:8px 20px 18px">
+        <button class="btn" id="upSave" type="button" disabled>Upload as draft</button>
+      </div>
+      <div class="notice warn hidden" id="upUnmatched" style="margin:0 20px 18px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>All payslip batches</h2>
+        <p class="hint" style="display:block">Everything prepared or uploaded, newest payout first.</p>
+      </div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact" id="psBatches"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
         <h2>Preview as an employee</h2>
-        <p class="hint" style="display:block">Exactly what they see, with the settings below. Prepare the cutoff first.</p>
+        <p class="hint" style="display:block">Exactly what they see, with the settings below.</p>
       </div>
       <div class="form-grid" style="padding:0 20px 12px">
+        <label>Batch <select id="psPreviewBatch"></select></label>
         <label>Employee <select id="psEmployee"></select></label>
       </div>
       <iframe id="psPreview" title="Payslip preview" class="hidden"
@@ -490,10 +521,11 @@
       <label class="checkline"><input type="checkbox" data-ps="showPosition"> Position</label>
       <label class="checkline"><input type="checkbox" data-ps="showEmployeeCode"> Employee code</label>
       <label class="checkline"><input type="checkbox" data-ps="showBranch"> Branch</label>
-      <label class="checkline"><input type="checkbox" data-ps="showZeroLines"> Lines of &#8369;0.00 (e.g. Days Absent Deduction when there were none)</label>
-      <label class="checkline"><input type="checkbox" data-ps="showLineNotes"> Detail rows without an amount (e.g. loan installment and balance, paid time off)</label>
+      <label class="checkline"><input type="checkbox" data-ps="showZeroLines"> Lines of 0.00 (e.g. Days Absent Deduction when there were none)</label>
+      <label class="checkline"><input type="checkbox" data-ps="showLineNotes"> Detail rows without an amount (e.g. commission items, loan installment and balance)</label>
       <label class="checkline"><input type="checkbox" data-ps="showNetTaxable"> Net taxable amount</label>
-      <label class="checkline"><input type="checkbox" data-ps="showRemarks"> Remarks</label>
+      <label class="checkline"><input type="checkbox" data-ps="showRemarks"> Remarks / notes</label>
+      <label class="checkline"><input type="checkbox" data-ps="showExtraDetails"> Extra details (reference, personal no., taxable base, employer pension, tax status)</label>
       <div class="form-grid" style="padding:4px 20px 12px;grid-template-columns:1fr">
         <label>Note at the bottom of every payslip (optional)
           <textarea id="psNote" rows="3" maxlength="2000" style="font:inherit;font-weight:400;padding:8px;border:1px solid var(--border-strong);border-radius:8px"></textarea></label>

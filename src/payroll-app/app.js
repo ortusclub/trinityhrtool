@@ -2299,8 +2299,11 @@
   /* =====================================================================
      PAYSLIP — release payslips to TrinityHR accounts and set what they show
      The app runs inside TrinityHR, so these calls carry the admin's session.
+     A batch is one payroll cutoff ("trinity-2026-11-P10") or one uploaded
+     Non-Trinity file ("notax-2026-10-23", "xk-2026-10-23").
      ===================================================================== */
-  var ps = { settings: null, status: null, busy: false };
+  var ps = { settings: null, status: null, batches: [], upload: null };
+  var KIND_NAME = { trinity: 'Trinity payroll', notax: 'No-Tax payroll', xk: 'XK payroll' };
 
   function psApi(path, method, body) {
     return fetch('/api/payroll/' + path, {
@@ -2309,19 +2312,19 @@
       body: body ? JSON.stringify(body) : undefined
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
-        if (res.status === 503 && data.setup === false) { psShowSetup(data.error); throw new Error(data.error); }
         if (!res.ok) throw new Error(data.error || 'TrinityHR answered ' + res.status);
         return data;
       });
     });
   }
 
-  function psShowSetup(msg) {
-    var el = $('#psSetup');
-    el.textContent = msg;
-    el.classList.remove('hidden');
-    ['#psPrepare', '#psPublish', '#psUnpublish', '#psSaveSettings'].forEach(function (id) { $(id).disabled = true; });
+  function psWhen(t) { return new Date(t).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }); }
+  function psDay(d) { return E.fmtShort(E.parseYmd(d)) + ' ' + d.slice(0, 4); }
+  function psMoney(n, cur) {
+    try { return Number(n).toLocaleString('en-PH', { style: 'currency', currency: cur, currencyDisplay: 'narrowSymbol' }); }
+    catch (e) { return cur + ' ' + plain(n); }
   }
+  function trinityBatch(per) { return 'trinity-' + per.id; }
 
   function renderPayslipTab() {
     $('#psYear').textContent = state.year;
@@ -2331,41 +2334,41 @@
     }).join('');
     $('#psPeriod').value = state.period.id;
     psLoadStatus();
+    psLoadBatches();
     if (!ps.settings) {
-      psApi('payslip-settings').then(function (d) { ps.settings = d.settings; psRenderSettings(); }, function () {});
+      psApi('payslip-settings').then(function (d) { ps.settings = d.settings; psRenderSettings(); },
+        function (err) { $('#psSettingsMsg').textContent = 'Could not load: ' + err.message; });
     }
   }
 
+  /* ---- Trinity cutoff ---- */
   function psLoadStatus() {
-    var id = state.period.id;
+    var id = trinityBatch(state.period);
     $('#psStatus').textContent = 'Checking TrinityHR…';
     $('#psUnmatched').classList.add('hidden');
-    return psApi('payslips?period=' + encodeURIComponent(id)).then(function (d) {
-      if (state.period.id !== id) return;
+    return psApi('payslips?batch=' + encodeURIComponent(id)).then(function (d) {
+      if (trinityBatch(state.period) !== id) return;
       ps.status = d;
       var n = d.payslips.length;
-      var when = function (t) { return new Date(t).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }); };
       $('#psStatus').innerHTML = !n
         ? 'Not prepared yet — ' + state.run.slips.length + ' payslip(s) on this cutoff here.'
-        : n + ' payslip(s) prepared ' + esc(when(d.prepared_at)) + ' · ' +
+        : n + ' payslip(s) prepared ' + esc(psWhen(d.prepared_at)) + ' · ' +
           (d.published_at
-            ? '<span class="pill rf">Published ' + esc(when(d.published_at)) + '</span> employees can see them.'
+            ? '<span class="pill rf">Published ' + esc(psWhen(d.published_at)) + '</span> employees can see them.'
             : '<span class="pill spc">Not published</span> employees can’t see them yet.');
       $('#psPublish').disabled = !n || !!d.published_at;
       $('#psUnpublish').disabled = !d.published_at;
-      $('#psEmployee').innerHTML = n
-        ? d.payslips.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.name || x.email) + '</option>'; }).join('')
-        : '<option value="">—</option>';
-      psPreview();
     }, function (err) {
       $('#psStatus').textContent = 'Could not reach TrinityHR: ' + err.message;
     });
   }
 
-  function psPreview() {
-    var id = $('#psEmployee').value, frame = $('#psPreview');
-    frame.classList.toggle('hidden', !id);
-    if (id) frame.src = '/payslip-preview/' + encodeURIComponent(id) + '?t=' + Date.now();
+  function psShowMissed(box, missed) {
+    box.innerHTML = missed.length
+      ? '<strong>' + missed.length + ' not saved</strong> — no TrinityHR account with that work email, or the row could not be read:' +
+        '<ul>' + missed.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>'
+      : '';
+    box.classList.toggle('hidden', !missed.length);
   }
 
   function psPrepare() {
@@ -2383,18 +2386,18 @@
     var btn = $('#psPrepare');
     btn.disabled = true; btn.textContent = 'Preparing…';
     psApi('payslips', 'PUT', {
-      period: { id: per.id, start: per.start, end: per.end, payout: per.payoutDate },
-      payslips: slips.filter(function (s) { return String(s.employee.email || '').trim(); }).map(trinityPayload)
+      batch: { id: trinityBatch(per), kind: 'trinity', label: cut, payout_date: per.payoutDate },
+      payslips: slips.filter(function (s) { return String(s.employee.email || '').trim(); }).map(function (s) {
+        var p = trinityPayload(s);
+        p.currency = 'PHP';
+        return p;
+      })
     }).then(function (r) {
-      var missed = r.unmatched.map(function (e) { return (byEmail[e] || e) + ' — ' + e; })
+      var missed = r.unmatched.concat(r.invalid).map(function (e) { return (byEmail[e] || e) + ' — ' + e; })
         .concat(noEmail.map(function (s) { return s.employee.lastName + ', ' + s.employee.firstName + ' — no email on file'; }));
-      var box = $('#psUnmatched');
-      box.innerHTML = missed.length
-        ? '<strong>' + missed.length + ' not prepared</strong> — no TrinityHR account with that work email:' +
-          '<ul>' + missed.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>'
-        : '';
-      box.classList.toggle('hidden', !missed.length);
-      return psLoadStatus().then(function () { if (missed.length) box.classList.remove('hidden'); });
+      return Promise.all([psLoadStatus(), psLoadBatches(trinityBatch(per))]).then(function () {
+        psShowMissed($('#psUnmatched'), missed);
+      });
     }).catch(function (err) {
       alert('Could not prepare payslips.\n\n' + err.message);
     }).then(function () {
@@ -2402,16 +2405,283 @@
     });
   }
 
-  function psRelease(publish) {
-    var per = state.period, n = ps.status ? ps.status.payslips.length : 0;
-    var cut = window.PayrollTemplate.cutoffTitle(per);
+  function psRelease(id, label, count, publish) {
     if (!confirm(publish
-      ? 'Publish ' + n + ' payslip(s) for ' + cut + '?\n\nEach person will see their own under My Workspace → Payslips.'
-      : 'Unpublish ' + cut + '?\n\nEmployees will no longer see these payslips.')) return;
-    psApi('payslips/release', 'POST', { period_id: per.id, published: publish })
-      .then(psLoadStatus, function (err) { alert('Could not ' + (publish ? 'publish' : 'unpublish') + '.\n\n' + err.message); });
+      ? 'Publish ' + count + ' payslip(s) for ' + label + '?\n\nEach person will see their own under My Workspace → Payslips.'
+      : 'Unpublish ' + label + '?\n\nEmployees will no longer see these payslips.')) return;
+    psApi('payslips/release', 'POST', { batch_id: id, published: publish })
+      .then(function () { return Promise.all([psLoadStatus(), psLoadBatches()]); },
+        function (err) { alert('Could not ' + (publish ? 'publish' : 'unpublish') + '.\n\n' + err.message); });
   }
 
+  /* ---- all batches + preview ---- */
+  function psLoadBatches(select) {
+    return psApi('payslips').then(function (d) {
+      ps.batches = d.batches;
+      var t = $('#psBatches');
+      t.innerHTML = !d.batches.length
+        ? '<tbody><tr><td class="muted">Nothing prepared or uploaded yet.</td></tr></tbody>'
+        : '<thead><tr><th>Payroll</th><th>Period</th><th>Payout</th><th class="num">Payslips</th><th>Status</th><th></th></tr></thead><tbody>' +
+          d.batches.map(function (b, i) {
+            return '<tr><td>' + esc(KIND_NAME[b.kind] || b.kind) + '</td><td>' + esc(b.label) + '</td><td>' + esc(psDay(b.payout_date)) +
+              '</td><td class="num">' + b.count + '</td><td>' +
+              (b.published_at ? '<span class="pill rf">Published</span>' : '<span class="pill spc">Draft</span>') +
+              '</td><td style="white-space:nowrap">' +
+              '<button class="btn ghost tiny" data-bview="' + i + '" type="button">Preview</button> ' +
+              (b.published_at
+                ? '<button class="btn ghost tiny" data-bunpub="' + i + '" type="button">Unpublish</button> '
+                : '<button class="btn tiny" data-bpub="' + i + '" type="button"' + (b.count ? '' : ' disabled') + '>Publish</button> ') +
+              '<button class="btn ghost danger tiny" data-bdel="' + i + '" type="button">Delete</button></td></tr>';
+          }).join('') + '</tbody>';
+      var sel = $('#psPreviewBatch'), keep = select || sel.value || trinityBatch(state.period);
+      sel.innerHTML = d.batches.length
+        ? d.batches.map(function (b) {
+            return '<option value="' + esc(b.id) + '">' + esc(KIND_NAME[b.kind] + ' · ' + b.label + ' · paid ' + psDay(b.payout_date)) + '</option>';
+          }).join('')
+        : '<option value="">—</option>';
+      if (d.batches.some(function (b) { return b.id === keep; })) sel.value = keep;
+      return psLoadPreviewPeople();
+    }, function (err) {
+      $('#psBatches').innerHTML = '<tbody><tr><td>Could not reach TrinityHR: ' + esc(err.message) + '</td></tr></tbody>';
+    });
+  }
+
+  function psLoadPreviewPeople() {
+    var id = $('#psPreviewBatch').value, sel = $('#psEmployee');
+    if (!id) { sel.innerHTML = '<option value="">—</option>'; psPreview(); return Promise.resolve(); }
+    return psApi('payslips?batch=' + encodeURIComponent(id)).then(function (d) {
+      var keep = sel.value;
+      sel.innerHTML = d.payslips.length
+        ? d.payslips.slice().sort(function (a, b) { return a.name.localeCompare(b.name); }).map(function (x) {
+            return '<option value="' + esc(x.id) + '">' + esc(x.name) + ' — ' + esc(psMoney(x.net_pay, x.currency)) + '</option>';
+          }).join('')
+        : '<option value="">—</option>';
+      if (keep && d.payslips.some(function (x) { return x.id === keep; })) sel.value = keep;
+      psPreview();
+    });
+  }
+
+  function psPreview() {
+    var batch = $('#psPreviewBatch').value, user = $('#psEmployee').value, frame = $('#psPreview');
+    frame.classList.toggle('hidden', !(batch && user));
+    if (batch && user) frame.src = '/payslip-preview/' + encodeURIComponent(batch) + '/' + encodeURIComponent(user) + '?t=' + Date.now();
+  }
+
+  function psBatchClick(ev) {
+    var t = ev.target.closest('button');
+    if (!t) return;
+    var b;
+    if (t.dataset.bview !== undefined) {
+      b = ps.batches[+t.dataset.bview];
+      $('#psPreviewBatch').value = b.id;
+      psLoadPreviewPeople().then(function () { $('#psPreview').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    } else if (t.dataset.bpub !== undefined) {
+      b = ps.batches[+t.dataset.bpub];
+      psRelease(b.id, KIND_NAME[b.kind] + ' · ' + b.label, b.count, true);
+    } else if (t.dataset.bunpub !== undefined) {
+      b = ps.batches[+t.dataset.bunpub];
+      psRelease(b.id, KIND_NAME[b.kind] + ' · ' + b.label, b.count, false);
+    } else if (t.dataset.bdel !== undefined) {
+      b = ps.batches[+t.dataset.bdel];
+      if (!confirm('Delete ' + KIND_NAME[b.kind] + ' · ' + b.label + ' (' + b.count + ' payslips)?' +
+        (b.published_at ? '\n\nIt is published — employees will lose these payslips.' : ''))) return;
+      psApi('payslips?batch=' + encodeURIComponent(b.id), 'DELETE')
+        .then(function () { return Promise.all([psLoadStatus(), psLoadBatches()]); },
+          function (err) { alert('Could not delete.\n\n' + err.message); });
+    }
+  }
+
+  /* ---- Non-Trinity CSV upload ---- */
+  /** RFC 4180 CSV: quoted cells may hold commas, quotes ("") and line breaks. */
+  function parseCsv(text) {
+    var rows = [], row = [], cell = '', q = false;
+    text = String(text).replace(/^﻿/, '');
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+        else cell += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); rows.push(row); row = []; cell = '';
+      } else cell += ch;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows;
+  }
+
+  function csvNum(v) {
+    var t = String(v || '').replace(/[,\s]/g, '');
+    if (!t || t === '—' || t === '-') return 0;
+    var n = parseFloat(t);
+    return isFinite(n) ? E.r2(n) : NaN;
+  }
+
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  /** "October 2026" as is; "10/1/2026" or "2026-10-01" as "October 2026". */
+  function csvPeriod(v) {
+    var t = String(v || '').trim(), m;
+    if ((m = t.match(/^(\d{1,2})\/\d{1,2}\/(\d{4})$/))) return MONTHS[+m[1] - 1] + ' ' + m[2];
+    if ((m = t.match(/^(\d{4})-(\d{2})-\d{2}$/))) return MONTHS[+m[2] - 1] + ' ' + m[1];
+    return t;
+  }
+
+  /* Mirrors the Payslip Generator sheets (payslip-sheet/NoTax.gs and
+     kosovo/SetupKosovo.gs): the same lines, labels and footer. */
+  function readPayslipCsv(text, opts) {
+    var rows = parseCsv(text), hi = -1;
+    for (var r = 0; r < Math.min(rows.length, 20); r++) {
+      if (String(rows[r][0] || '').trim() === 'No' && rows[r].indexOf('Email') !== -1) { hi = r; break; }
+    }
+    if (hi < 0) throw new Error('No header row starting with "No" … "Email" — is this a Payslip Generator CSV?');
+    var head = rows[hi].map(function (h) { return String(h).replace(/\s*\([A-Z]{3}\)\s*$/, '').trim().toLowerCase(); });
+    var kind = head.indexOf('tax status') !== -1 ? 'xk' : head.indexOf('currency') !== -1 ? 'notax' : null;
+    if (!kind) throw new Error('Neither a No-Tax payroll (Currency column) nor an XK payroll (Tax status column).');
+    var title = String(rows[0][0] || ''), cur = (title.match(/\(([A-Z]{3})\)/) || [])[1] || 'EUR';
+    var col = function (row, name) { var i = head.indexOf(name); return i === -1 ? '' : String(row[i] || '').trim(); };
+
+    var out = { kind: kind, payslips: [], problems: [], payouts: {}, periods: {}, currencies: {}, defaulted: 0 };
+    rows.slice(hi + 1).forEach(function (row, k) {
+      if (!row.some(function (c) { return String(c).trim(); })) return;
+      var line = hi + k + 2, who = col(row, 'employee') || ('row ' + line);
+      var email = col(row, 'email');
+      var v = {}, bad = [];
+      ['net', 'gross salary', 'commission', 'bonus', 'deduction / adjustment',
+        kind === 'xk' ? 'reimbursement, non-taxable' : 'reimbursement',
+        'employee contribution 5%', 'employer contribution 5%', 'taxable base', 'withholding tax'].forEach(function (c) {
+        v[c] = csvNum(col(row, c));
+        if (isNaN(v[c])) bad.push(c);
+      });
+      if (bad.length) { out.problems.push(who + ' (row ' + line + '): not a number under ' + bad.join(', ') + ' — skipped.'); return; }
+      if (!email) { out.problems.push(who + ' (row ' + line + '): no email — skipped.'); return; }
+
+      var reimb = v[kind === 'xk' ? 'reimbursement, non-taxable' : 'reimbursement'];
+      var earn = [{ label: 'Gross Salary', amount: v['gross salary'] }];
+      if (v.commission) {
+        earn.push({ label: 'Commission', amount: v.commission });
+        col(row, 'commission details').split(/\n|;/).forEach(function (d) {
+          d = d.trim();
+          if (d) earn.push({ label: d, amount: null, kind: 'sub' });
+        });
+      }
+      if (v.bonus) {
+        var bd = col(row, 'bonus description');
+        earn.push({ label: 'Bonus' + (bd ? ' – ' + bd : ''), amount: v.bonus });
+      }
+      if (reimb) earn.push({ label: kind === 'xk' ? 'Reimbursement (non-taxable)' : 'Reimbursement', amount: reimb });
+      var ded = [];
+      if (v['deduction / adjustment']) {
+        ded.push({ label: col(row, 'deduction description') || 'Salary / Commission Adjustment', amount: v['deduction / adjustment'] });
+      }
+      var info = [];
+      if (kind === 'xk') {
+        ded.push({ label: 'Pension Contribution, Employee 5% (Trust)', amount: v['employee contribution 5%'] });
+        ded.push({ label: 'Withholding Tax', amount: v['withholding tax'] });
+        info.push({ label: 'Taxable base', value: psMoney(v['taxable base'], cur) });
+        info.push({ label: 'Employer pension contribution', value: psMoney(v['employer contribution 5%'], cur) });
+        var ts = col(row, 'tax status'), emp = col(row, 'employer');
+        if (ts || emp) info.push({ label: 'Tax status', value: [ts, emp ? emp.toLowerCase() + ' employer' : ''].filter(Boolean).join(', ') });
+      }
+      if (col(row, 'reference')) info.push({ label: 'Reference', value: col(row, 'reference') });
+
+      var sum = function (ls) { return E.r2(ls.reduce(function (t, l) { return t + (l.amount || 0); }, 0)); };
+      var gross = sum(earn), totalDed = sum(ded), net = E.r2(gross - totalDed);
+      if (Math.abs(net - v.net) > 0.005) {
+        out.problems.push(who + ' (row ' + line + '): earnings − deductions = ' + plain(net) + ' but Net says ' + plain(v.net) + ' — skipped.');
+        return;
+      }
+      var currency = kind === 'xk' ? cur : col(row, 'currency').toUpperCase();
+      if (!currency) { currency = opts.currency; out.defaulted++; }
+      if (!/^[A-Z]{3}$/.test(currency)) { out.problems.push(who + ' (row ' + line + '): currency "' + currency + '" — skipped.'); return; }
+
+      var payout = col(row, 'payout date');
+      out.payouts[payout] = (out.payouts[payout] || 0) + 1;
+      out.periods[csvPeriod(col(row, 'payroll period'))] = true;
+      out.currencies[currency] = (out.currencies[currency] || 0) + 1;
+      out.payslips.push({
+        name: who,
+        email: email,
+        currency: currency,
+        lines: {
+          earnings: earn,
+          deductions: ded,
+          company: { name: opts.company, address: opts.address },
+          employee: { code: col(row, 'employee code') || col(row, 'no'), position: col(row, 'position'),
+            personal_no: col(row, 'personal no.') },
+          info: info
+        },
+        gross_pay: gross,
+        total_deductions: totalDed,
+        net_pay: net,
+        remarks: col(row, 'notes') || null
+      });
+    });
+    var payouts = Object.keys(out.payouts), periods = Object.keys(out.periods);
+    if (payouts.length !== 1 || !/^\d{4}-\d{2}-\d{2}$/.test(payouts[0])) {
+      throw new Error('Every row needs the same Payout Date as YYYY-MM-DD; found ' + (payouts.join(', ') || 'none') + '.');
+    }
+    out.payout = payouts[0];
+    out.label = periods.length === 1 && periods[0] ? periods[0] : csvPeriod(out.payout);
+    out.id = kind + '-' + out.payout;
+    return out;
+  }
+
+  function upRead() {
+    var f = $('#upFile').files[0];
+    ps.upload = null;
+    $('#upSave').disabled = true;
+    $('#upUnmatched').classList.add('hidden');
+    if (!f) { $('#upSummary').innerHTML = ''; return; }
+    f.text().then(function (text) {
+      var cur = $('#upCurrency').value.trim().toUpperCase() || 'EUR';
+      var up = readPayslipCsv(text, { company: $('#upCompany').value.trim(), address: $('#upAddress').value.trim(), currency: cur });
+      ps.upload = up;
+      var existing = ps.batches.filter(function (b) { return b.id === up.id; })[0];
+      $('#upSummary').innerHTML = '<div class="notice info">' +
+        '<strong>' + esc(KIND_NAME[up.kind]) + ' · ' + esc(up.label) + ' · paid ' + esc(psDay(up.payout)) + '</strong> — ' +
+        up.payslips.length + ' payslip(s): ' +
+        Object.keys(up.currencies).map(function (c) { return up.currencies[c] + ' in ' + c; }).join(', ') +
+        (up.defaulted ? ' (' + up.defaulted + ' with no currency, read as ' + esc(cur) + ')' : '') + '.' +
+        (existing ? '<br>This replaces the ' + (existing.published_at ? '<strong>published</strong> ' : '') +
+          'batch already uploaded for that payout (' + existing.count + ' payslips).' : '') +
+        (up.problems.length ? '<ul>' + up.problems.map(function (p) { return '<li>' + esc(p) + '</li>'; }).join('') + '</ul>' : '') +
+        '</div>';
+      $('#upSave').disabled = !up.payslips.length;
+    }).catch(function (err) {
+      $('#upSummary').innerHTML = '<div class="notice warn">' + esc(err.message) + '</div>';
+    });
+  }
+
+  function upSave() {
+    var up = ps.upload;
+    if (!up) return;
+    var existing = ps.batches.filter(function (b) { return b.id === up.id; })[0];
+    if (existing && existing.published_at &&
+        !confirm('That payroll is already published.\n\nUploading replaces what employees see. Continue?')) return;
+    var names = {};
+    up.payslips.forEach(function (p) { names[p.email.toLowerCase()] = p.name; });
+    var btn = $('#upSave');
+    btn.disabled = true; btn.textContent = 'Uploading…';
+    psApi('payslips', 'PUT', {
+      batch: { id: up.id, kind: up.kind, label: up.label, payout_date: up.payout },
+      payslips: up.payslips
+    }).then(function (r) {
+      var missed = r.unmatched.concat(r.invalid).map(function (e) { return (names[e] || e) + ' — ' + e; });
+      psShowMissed($('#upUnmatched'), missed);
+      $('#upSummary').innerHTML = '<div class="notice info"><strong>Uploaded as a draft</strong> — ' + r.saved +
+        ' payslip(s) saved. Preview them below, then Publish in the list.</div>';
+      $('#upFile').value = '';
+      ps.upload = null;
+      return psLoadBatches(up.id);
+    }).catch(function (err) {
+      alert('Could not upload.\n\n' + err.message);
+      btn.disabled = false;
+    }).then(function () { btn.textContent = 'Upload as draft'; });
+  }
+
+  /* ---- settings ---- */
   function psRenderSettings() {
     $$('[data-ps]').forEach(function (cb) { cb.checked = !!ps.settings[cb.dataset.ps]; });
     $('#psNote').value = ps.settings.note || '';
@@ -2476,9 +2746,18 @@
       psLoadStatus();
     });
     $('#psPrepare').addEventListener('click', psPrepare);
-    $('#psPublish').addEventListener('click', function () { psRelease(true); });
-    $('#psUnpublish').addEventListener('click', function () { psRelease(false); });
+    var trinityRelease = function (publish) {
+      var per = state.period, n = ps.status ? ps.status.payslips.length : 0;
+      psRelease(trinityBatch(per), window.PayrollTemplate.cutoffTitle(per), n, publish);
+    };
+    $('#psPublish').addEventListener('click', function () { trinityRelease(true); });
+    $('#psUnpublish').addEventListener('click', function () { trinityRelease(false); });
+    $('#psBatches').addEventListener('click', psBatchClick);
+    $('#psPreviewBatch').addEventListener('change', psLoadPreviewPeople);
     $('#psEmployee').addEventListener('change', psPreview);
+    $('#upFile').addEventListener('change', upRead);
+    ['#upCompany', '#upAddress', '#upCurrency'].forEach(function (id) { $(id).addEventListener('change', upRead); });
+    $('#upSave').addEventListener('click', upSave);
     $('#psSaveSettings').addEventListener('click', psSaveSettings);
     (function () {
       var cfg = Store.loadTrinity();

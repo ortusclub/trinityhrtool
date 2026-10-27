@@ -864,32 +864,35 @@ export interface KudosWithUsers extends Kudos {
   } | null;
 }
 
-/** One line of a payslip, as the payroll app prints it. A null amount is a
-    heading or a note row (e.g. a loan's installment detail). */
+/** One line of a payslip. A null amount is a heading or a detail row
+    (e.g. a loan's installment, or one commission item). */
 export interface PayslipLine {
   label: string;
   amount: number | null;
   kind?: "head" | "sub" | null;
 }
 
-export interface Payslip {
-  id: string;
+/** One payslip as stored (private storage; see lib/payslips-store.ts). */
+export interface StoredPayslip {
+  batch_id: string;
   employee_id: string;
-  period_id: string;
-  cutoff_start: string;
-  cutoff_end: string;
+  /** "January 1 – 15, 2026" for a cutoff, "October 2026" for a monthly run. */
+  period_label: string;
   payout_date: string;
+  /** ISO 4217, e.g. PHP, EUR, USD. */
+  currency: string;
   lines: {
     earnings: PayslipLine[];
     deductions: PayslipLine[];
     net_taxable?: number | null;
     company?: { name?: string; address?: string; tin?: string } | null;
-    employee?: { code?: string; position?: string; branch?: string } | null;
+    employee?: { code?: string; position?: string; branch?: string; personal_no?: string } | null;
+    /** Extra facts printed under net pay, e.g. reference, employer contribution. */
+    info?: { label: string; value: string }[];
   };
   gross_pay: number;
   total_deductions: number;
   net_pay: number;
   remarks: string | null;
   prepared_at: string;
-  prepared_by: string | null;
 }

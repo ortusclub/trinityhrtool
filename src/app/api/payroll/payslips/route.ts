@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { displayName } from "@/lib/utils";
 import {
   BATCH_ID,
@@ -7,8 +7,6 @@ import {
   getBatch,
   listBatches,
   saveBatch,
-  type BatchKind,
-  type BatchMeta,
 } from "@/lib/payslips-store";
 import type { PayslipLine, StoredPayslip } from "@/types/database";
 import { failed, payrollAdmin } from "../auth";
@@ -17,6 +15,7 @@ import { failed, payrollAdmin } from "../auth";
 // GET ?batch=ID  what a batch holds;  GET  every batch.
 // PUT            replace a batch (a payroll cutoff, or an uploaded file).
 // DELETE ?batch  remove a batch and its payslips.
+// Everything runs as the signed-in admin, so row-level security applies.
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -24,33 +23,25 @@ export async function GET(request: Request) {
   const admin = await payrollAdmin();
   if (admin instanceof NextResponse) return admin;
   const id = new URL(request.url).searchParams.get("batch");
+  const db = await createClient();
   try {
-    if (id === null) {
-      const batches = await listBatches();
-      return NextResponse.json({
-        batches: batches.map(({ meta, release }) => ({
-          id: meta.id,
-          kind: meta.kind,
-          label: meta.label,
-          payout_date: meta.payout_date,
-          prepared_at: meta.prepared_at,
-          published_at: release?.published_at ?? null,
-          count: meta.entries.length,
-        })),
-      });
-    }
+    if (id === null) return NextResponse.json({ batches: await listBatches(db) });
     if (!BATCH_ID.test(id)) return NextResponse.json({ error: "Unknown batch." }, { status: 400 });
-    const batch = await getBatch(id);
+    const batch = await getBatch(db, id);
+    const rows = batch?.rows ?? [];
     return NextResponse.json({
-      prepared_at: batch?.meta.prepared_at ?? null,
-      published_at: batch?.release?.published_at ?? null,
-      payslips: (batch?.meta.entries ?? []).map((e) => ({
-        id: e.user_id,
-        name: e.name,
-        email: e.email,
-        net_pay: e.net_pay,
-        currency: e.currency,
-      })),
+      prepared_at: rows.reduce<string | null>((t, r) => (!t || r.prepared_at > t ? r.prepared_at : t), null),
+      published_at: batch?.published_at ?? null,
+      payslips: rows.map((r) => {
+        const emp = (Array.isArray(r.employee) ? r.employee[0] : r.employee) as Parameters<typeof displayName>[0];
+        return {
+          id: r.employee_id,
+          name: displayName(emp),
+          email: emp?.email ?? "",
+          net_pay: Number(r.net_pay),
+          currency: (r.lines as { currency?: string } | null)?.currency || "PHP",
+        };
+      }),
     });
   } catch (e) {
     return failed(e);
@@ -81,17 +72,14 @@ export async function PUT(request: Request) {
   if (admin instanceof NextResponse) return admin;
 
   const body = (await request.json().catch(() => null)) as {
-    batch?: { id?: string; kind?: string; label?: string; payout_date?: string };
+    batch?: { id?: string; label?: string; payout_date?: string; cutoff_start?: string; cutoff_end?: string };
     payslips?: Record<string, unknown>[];
   } | null;
   const b = body?.batch;
-  const kind = b?.kind as BatchKind;
   if (
     !b ||
     !BATCH_ID.test(b.id ?? "") ||
-    !["trinity", "notax", "xk"].includes(kind) ||
-    !b.id!.startsWith(kind + "-") ||
-    !DATE.test(b.payout_date ?? "") ||
+    ![b.payout_date, b.cutoff_start, b.cutoff_end].every((d) => DATE.test(d ?? "")) ||
     !text(b.label)
   ) {
     return NextResponse.json({ error: "Unknown batch." }, { status: 400 });
@@ -101,7 +89,8 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const { data: users, error } = await createAdminClient()
+    const db = await createClient();
+    const { data: users, error } = await db
       .from("users")
       .select("id, email, full_name, preferred_name, first_name, last_name");
     if (error) throw error;
@@ -109,7 +98,6 @@ export async function PUT(request: Request) {
       (users ?? []).filter((u) => u.email).map((u) => [String(u.email).trim().toLowerCase(), u]),
     );
 
-    const byId = new Map((users ?? []).map((u) => [u.id, u]));
     const now = new Date().toISOString();
     const unmatched: string[] = [];
     const invalid: string[] = [];
@@ -168,25 +156,7 @@ export async function PUT(request: Request) {
       });
     }
 
-    const meta: BatchMeta = {
-      id: b.id!,
-      kind,
-      label: text(b.label, 80),
-      payout_date: b.payout_date!,
-      prepared_at: now,
-      prepared_by: admin.id,
-      entries: slips.map((s) => {
-        const u = byId.get(s.employee_id)!;
-        return {
-          user_id: s.employee_id,
-          name: displayName(u),
-          email: u.email,
-          net_pay: s.net_pay,
-          currency: s.currency,
-        };
-      }),
-    };
-    await saveBatch(meta, slips);
+    await saveBatch(db, { id: b.id!, cutoff_start: b.cutoff_start!, cutoff_end: b.cutoff_end! }, slips, admin.id);
     return NextResponse.json({ saved: slips.length, unmatched, invalid });
   } catch (e) {
     return failed(e);
@@ -199,7 +169,7 @@ export async function DELETE(request: Request) {
   const id = new URL(request.url).searchParams.get("batch") ?? "";
   if (!BATCH_ID.test(id)) return NextResponse.json({ error: "Unknown batch." }, { status: 400 });
   try {
-    await deleteBatch(id);
+    await deleteBatch(await createClient(), id);
     return NextResponse.json({ deleted: id });
   } catch (e) {
     return failed(e);

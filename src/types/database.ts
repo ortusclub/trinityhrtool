@@ -872,7 +872,7 @@ export interface PayslipLine {
   kind?: "head" | "sub" | null;
 }
 
-/** One payslip as stored (private storage; see lib/payslips-store.ts). */
+/** One payslip, as read from the payslips table (lib/payslips-store.ts). */
 export interface StoredPayslip {
   batch_id: string;
   employee_id: string;

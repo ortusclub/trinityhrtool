@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/helpers";
+import { createClient } from "@/lib/supabase/server";
 import { displayName } from "@/lib/utils";
 import { getSlip, isReleased, loadPayslipSettings } from "@/lib/payslips-store";
 import { PayslipView } from "@/components/payslips/payslip-view";
@@ -14,10 +15,11 @@ export default async function PayslipPage({
 }) {
   const { id } = await params;
   const user = await getCurrentUser();
+  const db = await createClient();
   const [slip, released, settings] = await Promise.all([
-    getSlip(id, user.id),
-    isReleased(id).catch(() => false),
-    loadPayslipSettings(),
+    getSlip(db, id, user.id),
+    isReleased(db, id),
+    loadPayslipSettings(db),
   ]);
   if (!slip || !released) notFound();
 

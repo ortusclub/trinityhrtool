@@ -1,5 +1,5 @@
-// What every payslip shows, set on Admin → Payroll → Payslip and stored
-// with the payslips (lib/payslips-store.ts). Applied when a payslip is displayed, so a change reaches
+// What every payslip shows, set on Admin → Payroll → Payslip and stored in
+// payslip_settings. Applied when a payslip is displayed, so a change reaches
 // every payslip already released.
 export interface PayslipSettings {
   showCompanyAddress: boolean;

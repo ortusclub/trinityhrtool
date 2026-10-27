@@ -1,20 +1,22 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { readPayslipSettings, type PayslipSettings } from "@/lib/payslips";
+import { formatDate } from "@/lib/utils";
 import type { StoredPayslip } from "@/types/database";
 
-// Payslips live in a private Supabase Storage bucket, read and written only
-// here with the service role. Callers check who may see what:
-//   batches/<batch>.json       what a batch holds (admins)
-//   published/<batch>.json     present once a batch is released
-//   slips/<batch>/<user>.json  one payslip
-//   settings.json              what every payslip shows
-const BUCKET = "payslips";
-
-/** trinity-2026-11-P10 (a payroll cutoff), notax-2026-10-23, xk-2026-10-23. */
-export const BATCH_ID = /^(trinity-\d{4}-\d{2}-P(10|25)|(notax|xk)-\d{4}-\d{2}-\d{2})$/;
+// Payslips in the payslips / payslip_releases / payslip_settings tables
+// (supabase/migrations/20261027_add_payslips.sql). Callers pass the
+// signed-in user's client, so row-level security decides what comes back:
+// admins see everything, a member only their own from released batches.
+//
+// A batch is one period_id: a payroll cutoff ("2026-11-P10") or an uploaded
+// Non-Trinity file ("notax-2026-10-23", "xk-2026-10-23").
+export const BATCH_ID = /^(\d{4}-\d{2}-P(10|25)|(notax|xk)-\d{4}-\d{2}-\d{2})$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type BatchKind = "trinity" | "notax" | "xk";
+export function batchKind(id: string): BatchKind {
+  return id.startsWith("notax-") ? "notax" : id.startsWith("xk-") ? "xk" : "trinity";
+}
 
 export interface BatchEntry {
   user_id: string;
@@ -24,172 +26,208 @@ export interface BatchEntry {
   currency: string;
 }
 
-export interface BatchMeta {
+export interface BatchSummary {
   id: string;
   kind: BatchKind;
   label: string;
   payout_date: string;
   prepared_at: string;
-  prepared_by: string;
-  entries: BatchEntry[];
+  published_at: string | null;
+  count: number;
 }
 
-export interface Release {
-  published_at: string;
-  published_by: string;
+interface Row {
+  employee_id: string;
+  period_id: string;
+  cutoff_start: string;
+  cutoff_end: string;
+  payout_date: string;
+  lines: StoredPayslip["lines"] & { currency?: string; period_label?: string };
+  gross_pay: number | string;
+  total_deductions: number | string;
+  net_pay: number | string;
+  remarks: string | null;
+  prepared_at: string;
 }
 
-let bucketReady: Promise<void> | null = null;
+/** Cutoffs prepared before uploads existed carry no label or currency. */
+function toSlip(r: Row): StoredPayslip {
+  const { currency, period_label, ...lines } = r.lines ?? ({} as Row["lines"]);
+  return {
+    batch_id: r.period_id,
+    employee_id: r.employee_id,
+    period_label: period_label || `${formatDate(r.cutoff_start)} – ${formatDate(r.cutoff_end)}`,
+    payout_date: r.payout_date,
+    currency: currency || "PHP",
+    lines,
+    gross_pay: Number(r.gross_pay),
+    total_deductions: Number(r.total_deductions),
+    net_pay: Number(r.net_pay),
+    remarks: r.remarks,
+    prepared_at: r.prepared_at,
+  };
+}
 
-/** Creates the private bucket the first time it's needed. */
-function storage() {
-  const client = createAdminClient();
-  if (!bucketReady) {
-    bucketReady = (async () => {
-      const { error } = await client.storage.getBucket(BUCKET);
-      if (!error) return;
-      const made = await client.storage.createBucket(BUCKET, { public: false });
-      if (made.error && !/already exists/i.test(made.error.message)) throw made.error;
-    })().catch((e) => {
-      bucketReady = null;
-      throw e;
+const ROW = "employee_id, period_id, cutoff_start, cutoff_end, payout_date, lines, gross_pay, total_deductions, net_pay, remarks, prepared_at";
+
+export async function getBatch(db: SupabaseClient, id: string) {
+  if (!BATCH_ID.test(id)) return null;
+  const [{ data, error }, { data: release, error: relError }] = await Promise.all([
+    db
+      .from("payslips")
+      .select("employee_id, net_pay, prepared_at, lines, employee:users!payslips_employee_id_fkey(email, full_name, preferred_name, first_name, last_name)")
+      .eq("period_id", id),
+    db.from("payslip_releases").select("published_at").eq("period_id", id).maybeSingle(),
+  ]);
+  if (error) throw error;
+  if (relError) throw relError;
+  return { rows: data ?? [], published_at: (release?.published_at as string | null) ?? null };
+}
+
+interface ListRow {
+  period_id: string;
+  payout_date: string;
+  cutoff_start: string;
+  cutoff_end: string;
+  prepared_at: string;
+  label: string | null;
+}
+
+export async function listBatches(db: SupabaseClient): Promise<BatchSummary[]> {
+  // One row per payslip, read a page at a time (the API returns at most
+  // 1,000 rows per request).
+  const data: ListRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await db
+      .from("payslips")
+      .select("period_id, payout_date, cutoff_start, cutoff_end, prepared_at, label:lines->>period_label")
+      .order("id")
+      .range(from, from + 999);
+    if (error) throw error;
+    data.push(...((page ?? []) as ListRow[]));
+    if (!page || page.length < 1000) break;
+  }
+  const { data: releases, error: relError } = await db
+    .from("payslip_releases")
+    .select("period_id, published_at");
+  if (relError) throw relError;
+  const published = new Map((releases ?? []).map((r) => [r.period_id as string, r.published_at as string | null]));
+  const out = new Map<string, BatchSummary>();
+  for (const r of data) {
+    const b = out.get(r.period_id);
+    if (b) {
+      b.count++;
+      if (r.prepared_at > b.prepared_at) b.prepared_at = r.prepared_at;
+      continue;
+    }
+    out.set(r.period_id, {
+      id: r.period_id,
+      kind: batchKind(r.period_id),
+      label: r.label || `${formatDate(r.cutoff_start)} – ${formatDate(r.cutoff_end)}`,
+      payout_date: r.payout_date,
+      prepared_at: r.prepared_at,
+      published_at: published.get(r.period_id) ?? null,
+      count: 1,
     });
   }
-  return bucketReady.then(() => client.storage.from(BUCKET));
+  return [...out.values()].sort((a, b) => b.payout_date.localeCompare(a.payout_date));
 }
 
-async function readJson<T>(path: string): Promise<T | null> {
-  const { data, error } = await (await storage()).download(path);
-  if (error || !data) return null;
-  try {
-    return JSON.parse(await data.text()) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function writeJson(path: string, value: unknown): Promise<void> {
-  const { error } = await (await storage()).upload(path, JSON.stringify(value), {
-    contentType: "application/json",
-    upsert: true,
-  });
-  if (error) throw error;
-}
-
-async function remove(paths: string[]): Promise<void> {
-  for (let i = 0; i < paths.length; i += 100) {
-    const { error } = await (await storage()).remove(paths.slice(i, i + 100));
-    if (error) throw error;
-  }
-}
-
-async function listNames(folder: string): Promise<string[]> {
-  const out: string[] = [];
-  for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await (await storage()).list(folder, { limit: 1000, offset });
-    if (error) throw error;
-    out.push(...(data ?? []).map((f) => f.name).filter((n) => n.endsWith(".json")));
-    if (!data || data.length < 1000) return out;
-  }
-}
-
-/** Runs `fn` over `items`, a few at a time. */
-async function each<T, R>(items: T[], fn: (item: T) => Promise<R>, width = 8): Promise<R[]> {
-  const out: R[] = new Array(items.length);
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(width, items.length) }, async () => {
-      while (next < items.length) {
-        const i = next++;
-        out[i] = await fn(items[i]);
-      }
-    }),
+/** Replaces a batch's payslips with `slips`. */
+export async function saveBatch(
+  db: SupabaseClient,
+  batch: { id: string; cutoff_start: string; cutoff_end: string },
+  slips: StoredPayslip[],
+  preparedBy: string,
+): Promise<void> {
+  const del = await db.from("payslips").delete().eq("period_id", batch.id);
+  if (del.error) throw del.error;
+  if (!slips.length) return;
+  const ins = await db.from("payslips").insert(
+    slips.map((s) => ({
+      employee_id: s.employee_id,
+      period_id: batch.id,
+      cutoff_start: batch.cutoff_start,
+      cutoff_end: batch.cutoff_end,
+      payout_date: s.payout_date,
+      lines: { ...s.lines, currency: s.currency, period_label: s.period_label },
+      gross_pay: s.gross_pay,
+      total_deductions: s.total_deductions,
+      net_pay: s.net_pay,
+      remarks: s.remarks,
+      prepared_at: s.prepared_at,
+      prepared_by: preparedBy,
+    })),
   );
-  return out;
+  if (ins.error) throw ins.error;
 }
 
-export async function getBatch(id: string) {
-  if (!BATCH_ID.test(id)) return null;
-  const [meta, release] = await Promise.all([
-    readJson<BatchMeta>(`batches/${id}.json`),
-    readJson<Release>(`published/${id}.json`),
+export async function deleteBatch(db: SupabaseClient, id: string): Promise<void> {
+  const [a, b] = await Promise.all([
+    db.from("payslips").delete().eq("period_id", id),
+    db.from("payslip_releases").delete().eq("period_id", id),
   ]);
-  return meta ? { meta, release } : null;
+  if (a.error) throw a.error;
+  if (b.error) throw b.error;
 }
 
-export async function listBatches() {
-  const [ids, published] = await Promise.all([listNames("batches"), listNames("published")]);
-  const released = new Set(published);
-  const metas = await each(ids, (n) => readJson<BatchMeta>(`batches/${n}`));
-  const releases = await each(
-    metas.map((m) => m?.id ?? ""),
-    (id) => (id && released.has(`${id}.json`) ? readJson<Release>(`published/${id}.json`) : Promise.resolve(null)),
-  );
-  return metas
-    .map((meta, i) => (meta ? { meta, release: releases[i] } : null))
-    .filter((b): b is { meta: BatchMeta; release: Release | null } => !!b)
-    .sort((a, b) => b.meta.payout_date.localeCompare(a.meta.payout_date));
+export async function setRelease(db: SupabaseClient, id: string, by: string | null): Promise<string | null> {
+  const published_at = by ? new Date().toISOString() : null;
+  const { error } = await db
+    .from("payslip_releases")
+    .upsert({ period_id: id, published_at, published_by: by }, { onConflict: "period_id" });
+  if (error) throw error;
+  return published_at;
 }
 
-/** Replaces a batch: writes every payslip, drops ones no longer in it. */
-export async function saveBatch(meta: BatchMeta, slips: StoredPayslip[]): Promise<void> {
-  const keep = new Set(slips.map((s) => `${s.employee_id}.json`));
-  const before = await listNames(`slips/${meta.id}`);
-  await each(slips, (s) => writeJson(`slips/${meta.id}/${s.employee_id}.json`, s));
-  const stale = before.filter((n) => !keep.has(n)).map((n) => `slips/${meta.id}/${n}`);
-  if (stale.length) await remove(stale);
-  await writeJson(`batches/${meta.id}.json`, meta);
-}
-
-export async function deleteBatch(id: string): Promise<void> {
-  const slips = (await listNames(`slips/${id}`)).map((n) => `slips/${id}/${n}`);
-  await remove([...slips, `batches/${id}.json`, `published/${id}.json`]);
-  releasedCache = null;
-}
-
-export async function setRelease(id: string, release: Release | null): Promise<void> {
-  if (release) await writeJson(`published/${id}.json`, release);
-  else await remove([`published/${id}.json`]);
-  releasedCache = null;
-}
-
-export async function getSlip(batchId: string, userId: string) {
+export async function getSlip(db: SupabaseClient, batchId: string, userId: string) {
   if (!BATCH_ID.test(batchId) || !UUID.test(userId)) return null;
-  return readJson<StoredPayslip>(`slips/${batchId}/${userId}.json`);
+  const { data } = await db
+    .from("payslips")
+    .select(ROW)
+    .eq("period_id", batchId)
+    .eq("employee_id", userId)
+    .maybeSingle();
+  return data ? toSlip(data as Row) : null;
 }
 
 /** A person's own payslips from released batches, newest first. */
-export async function releasedSlipsFor(userId: string): Promise<StoredPayslip[]> {
-  if (!UUID.test(userId)) return [];
-  const ids = (await listNames("published")).map((n) => n.replace(/\.json$/, ""));
-  const slips = await each(ids, (id) => getSlip(id, userId));
-  return slips
-    .filter((s): s is StoredPayslip => !!s)
-    .sort((a, b) => b.payout_date.localeCompare(a.payout_date));
+export async function releasedSlipsFor(db: SupabaseClient, userId: string): Promise<StoredPayslip[]> {
+  const [{ data }, { data: releases }] = await Promise.all([
+    db.from("payslips").select(ROW).eq("employee_id", userId).order("payout_date", { ascending: false }),
+    db.from("payslip_releases").select("period_id").not("published_at", "is", null),
+  ]);
+  // RLS already hides drafts from members; admins can read drafts, which
+  // don't belong on their own list.
+  const released = new Set((releases ?? []).map((r) => r.period_id));
+  return ((data ?? []) as Row[]).filter((r) => released.has(r.period_id)).map(toSlip);
 }
 
-export async function isReleased(batchId: string): Promise<boolean> {
-  return !!(await readJson<Release>(`published/${batchId}.json`));
+export async function isReleased(db: SupabaseClient, batchId: string): Promise<boolean> {
+  const { data } = await db
+    .from("payslip_releases")
+    .select("published_at")
+    .eq("period_id", batchId)
+    .maybeSingle();
+  return !!data?.published_at;
 }
 
-// The menu asks on every page whether anything is released yet; that only
-// changes when someone publishes, so a few minutes' memory is plenty.
-let releasedCache: { value: boolean; at: number } | null = null;
-export async function anyReleased(): Promise<boolean> {
-  if (releasedCache && Date.now() - releasedCache.at < 5 * 60_000) return releasedCache.value;
-  try {
-    const value = (await listNames("published")).length > 0;
-    releasedCache = { value, at: Date.now() };
-    return value;
-  } catch {
-    return false;
-  }
+export async function anyReleased(db: SupabaseClient): Promise<boolean> {
+  const { count } = await db
+    .from("payslip_releases")
+    .select("period_id", { count: "exact", head: true })
+    .not("published_at", "is", null);
+  return !!count;
 }
 
-export async function loadPayslipSettings(): Promise<PayslipSettings> {
-  return readPayslipSettings(await readJson("settings.json"));
+export async function loadPayslipSettings(db: SupabaseClient): Promise<PayslipSettings> {
+  const { data } = await db.from("payslip_settings").select("settings").eq("id", 1).maybeSingle();
+  return readPayslipSettings(data?.settings);
 }
 
-export async function savePayslipSettings(settings: PayslipSettings): Promise<void> {
-  await writeJson("settings.json", settings);
+export async function savePayslipSettings(db: SupabaseClient, settings: PayslipSettings, by: string): Promise<void> {
+  const { error } = await db
+    .from("payslip_settings")
+    .upsert({ id: 1, settings, updated_at: new Date().toISOString(), updated_by: by }, { onConflict: "id" });
+  if (error) throw error;
 }

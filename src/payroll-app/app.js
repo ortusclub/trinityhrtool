@@ -2299,7 +2299,7 @@
   /* =====================================================================
      PAYSLIP — release payslips to TrinityHR accounts and set what they show
      The app runs inside TrinityHR, so these calls carry the admin's session.
-     A batch is one payroll cutoff ("trinity-2026-11-P10") or one uploaded
+     A batch is one payroll cutoff ("2026-11-P10") or one uploaded
      Non-Trinity file ("notax-2026-10-23", "xk-2026-10-23").
      ===================================================================== */
   var ps = { settings: null, status: null, batches: [], upload: null };
@@ -2324,7 +2324,7 @@
     try { return Number(n).toLocaleString('en-PH', { style: 'currency', currency: cur, currencyDisplay: 'narrowSymbol' }); }
     catch (e) { return cur + ' ' + plain(n); }
   }
-  function trinityBatch(per) { return 'trinity-' + per.id; }
+  function trinityBatch(per) { return per.id; }
 
   function renderPayslipTab() {
     $('#psYear').textContent = state.year;
@@ -2386,7 +2386,7 @@
     var btn = $('#psPrepare');
     btn.disabled = true; btn.textContent = 'Preparing…';
     psApi('payslips', 'PUT', {
-      batch: { id: trinityBatch(per), kind: 'trinity', label: cut, payout_date: per.payoutDate },
+      batch: { id: trinityBatch(per), label: cut, payout_date: per.payoutDate, cutoff_start: per.start, cutoff_end: per.end },
       payslips: slips.filter(function (s) { return String(s.employee.email || '').trim(); }).map(function (s) {
         var p = trinityPayload(s);
         p.currency = 'PHP';
@@ -2625,6 +2625,12 @@
     out.payout = payouts[0];
     out.label = periods.length === 1 && periods[0] ? periods[0] : csvPeriod(out.payout);
     out.id = kind + '-' + out.payout;
+    // The month the label names ("October 2026"), else the payout's month.
+    var lm = out.label.match(/^([A-Za-z]+) (\d{4})$/), mi = lm ? MONTHS.indexOf(lm[1]) : -1;
+    var y = mi >= 0 ? +lm[2] : +out.payout.slice(0, 4), mo = mi >= 0 ? mi : +out.payout.slice(5, 7) - 1;
+    var pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
+    out.start = y + '-' + pad2(mo + 1) + '-01';
+    out.end = y + '-' + pad2(mo + 1) + '-' + pad2(new Date(y, mo + 1, 0).getDate());
     return out;
   }
 
@@ -2665,7 +2671,7 @@
     var btn = $('#upSave');
     btn.disabled = true; btn.textContent = 'Uploading…';
     psApi('payslips', 'PUT', {
-      batch: { id: up.id, kind: up.kind, label: up.label, payout_date: up.payout },
+      batch: { id: up.id, label: up.label, payout_date: up.payout, cutoff_start: up.start, cutoff_end: up.end },
       payslips: up.payslips
     }).then(function (r) {
       var missed = r.unmatched.concat(r.invalid).map(function (e) { return (names[e] || e) + ' — ' + e; });

@@ -35,7 +35,7 @@ export default async function DashboardLayout({
         .select("id", { count: "exact", head: true })
         .eq("reviewer_id", user.id)
         .eq("status", "pending"),
-      anyReleased(),
+      anyReleased(supabase),
     ]);
 
   const comingSoonRoutes = [

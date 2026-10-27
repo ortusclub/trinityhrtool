@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { BATCH_ID, getBatch, setRelease } from "@/lib/payslips-store";
 import { failed, payrollAdmin } from "../../auth";
 
@@ -13,14 +14,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unknown batch." }, { status: 400 });
   }
   try {
-    if (body.published && !(await getBatch(body.batch_id!))) {
+    const db = await createClient();
+    if (body.published && !(await getBatch(db, body.batch_id!))?.rows.length) {
       return NextResponse.json({ error: "Prepare or upload the payslips first." }, { status: 400 });
     }
-    const release = body.published
-      ? { published_at: new Date().toISOString(), published_by: admin.id }
-      : null;
-    await setRelease(body.batch_id!, release);
-    return NextResponse.json({ published_at: release?.published_at ?? null });
+    const published_at = await setRelease(db, body.batch_id!, body.published ? admin.id : null);
+    return NextResponse.json({ published_at });
   } catch (e) {
     return failed(e);
   }

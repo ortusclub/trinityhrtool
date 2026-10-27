@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/helpers";
+import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/utils";
 import { releasedSlipsFor } from "@/lib/payslips-store";
 import { money } from "@/components/payslips/payslip-view";
 
 export default async function PayslipsPage() {
   const user = await getCurrentUser();
-  const payslips = await releasedSlipsFor(user.id).catch(() => []);
+  const payslips = await releasedSlipsFor(await createClient(), user.id);
 
   return (
     <div className="space-y-8">

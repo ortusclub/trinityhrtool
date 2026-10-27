@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/helpers";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { displayName } from "@/lib/utils";
 import { getSlip, loadPayslipSettings } from "@/lib/payslips-store";
 import { PayslipView } from "@/components/payslips/payslip-view";
@@ -14,10 +14,11 @@ export default async function PayslipPreviewPage({
 }) {
   await requireRole("hr_admin");
   const { batch, user } = await params;
+  const db = await createClient();
   const [slip, settings, { data: employee }] = await Promise.all([
-    getSlip(batch, user),
-    loadPayslipSettings(),
-    createAdminClient()
+    getSlip(db, batch, user),
+    loadPayslipSettings(db),
+    db
       .from("users")
       .select("full_name, preferred_name, first_name, last_name, email")
       .eq("id", user)

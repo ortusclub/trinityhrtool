@@ -1480,6 +1480,29 @@
         '</tr>';
     }).join('');
     applySort('emp');
+    filterEmployees();
+  }
+
+  /* The search box above the roster: hides rows that don't contain every
+     word typed, looking at what each row shows (ID, names, email, company,
+     position, department), so edits are found without a re-render. */
+  function filterEmployees() {
+    var input = $('#empSearch'), body = $('#empBody');
+    if (!input || !body) return;
+    var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    var none = body.querySelector('tr.no-match');
+    if (none) none.remove();
+    var rows = body.querySelectorAll(':scope > tr[data-s-id]'), shown = 0;
+    Array.prototype.forEach.call(rows, function (tr) {
+      var text = Array.prototype.map.call(tr.children, cellValue).join(' ').toLowerCase();
+      var hit = words.every(function (w) { return text.indexOf(w) !== -1; });
+      tr.style.display = hit ? '' : 'none';
+      if (hit) shown++;
+    });
+    if (rows.length && !shown) {
+      body.insertAdjacentHTML('beforeend', '<tr class="no-match"><td colspan="16" class="muted" style="padding:18px">' +
+        'No employees match \u201c' + esc(input.value.trim()) + '\u201d.</td></tr>');
+    }
   }
 
   var ITEM_KINDS = [
@@ -3136,6 +3159,7 @@
     addTopScrollbars();
     wireSort('run');
     wireSort('emp');
+    $('#empSearch').addEventListener('input', filterEmployees);
     applySort('run');
   }
 

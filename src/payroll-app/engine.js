@@ -571,13 +571,14 @@
     var tendoPay = num(dtr.tendoPay);
     var sssLoan = r2(num(dtr.sssLoan) + loans.sss);
     var hmo = num(dtr.hmo);
+    var classPass = num(dtr.classPass);
     var otherDeduction = r2(num(dtr.otherDeduction) + loans.other);
     var reimbursement = num(dtr.reimbursement);
     // Positive = over-withheld and refunded to the employee; negative = tax
     // still due, collected on this payout.
     var taxRefund = r2(num(extra.taxRefund));
 
-    var postTaxDeductions = r2(tendoPay + sssLoan + hmo + otherDeduction +
+    var postTaxDeductions = r2(tendoPay + sssLoan + hmo + classPass + otherDeduction +
       items.totalDeductions);
 
     /* ------------------------ NET PAY (col AF) ------------------------- */
@@ -635,6 +636,7 @@
         thirteenthExempt: thirteenthExempt,
         thirteenthTaxable: thirteenthTaxable,
         quarterlyBonus: quarterlyBonus,
+        quarterlyBonusDetails: dtr.bonusDetails || '',
         transportationAllowance: transportationAllowance,
         taxableAllowances: items.taxableAllowances,
         nonTaxAllowances: items.nonTaxAllowances,
@@ -661,7 +663,7 @@
       },
       loans: loans,
       postTax: {
-        tendoPay: tendoPay, sssLoan: sssLoan, hmo: hmo,
+        tendoPay: tendoPay, sssLoan: sssLoan, hmo: hmo, classPass: classPass,
         sssLoanManual: num(dtr.sssLoan), sssLoanAuto: loans.sss,
         otherDeductionManual: num(dtr.otherDeduction), otherLoanAuto: loans.other,
         otherDeduction: otherDeduction, reimbursement: reimbursement, taxRefund: taxRefund,
@@ -722,6 +724,7 @@
     e.deMinimis = r2(v('deMinimis') - e.deMinimisDeduction);
     e.deMinimisProrated = false;
     e.quarterlyBonus = v('quarterlyBonus');
+    e.quarterlyBonusDetails = P.bonusDetails || '';
     e.transportationGiven = v('travel');
     e.travelDeduction = a('travelDeduction');
     e.transportationAllowance = r2(e.transportationGiven - e.travelDeduction);
@@ -767,9 +770,10 @@
     var pt = slip.postTax;
     pt.tendoPay = a('tendo'); pt.hmo = a('hmo'); pt.otherDeduction = a('other');
     pt.sssLoan = a('sssLoan'); pt.sssLoanManual = pt.sssLoan; pt.sssLoanAuto = 0;
+    pt.classPass = a('classPass');
     pt.otherDeductionManual = pt.otherDeduction; pt.otherLoanAuto = 0;
     pt.reimbursement = v('reimbursement'); pt.taxRefund = v('taxRefund'); pt.customDeductions = [];
-    pt.total = r2(pt.tendoPay + pt.hmo + pt.otherDeduction + pt.sssLoan);
+    pt.total = r2(pt.tendoPay + pt.hmo + pt.otherDeduction + pt.sssLoan + pt.classPass);
     slip.otherDeductions = []; slip.totalOtherDeductions = 0;
     slip.employerCosts = []; slip.totalEmployerCost = 0;
 

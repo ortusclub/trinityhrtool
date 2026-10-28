@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { buildICal, type CalendarEvent } from "@/lib/calendar/ical";
 import { displayName } from "@/lib/utils";
 import { fetchAllRows } from "@/lib/supabase/paginate";
+import { LEAVE_TYPE_LABELS } from "@/lib/constants";
 
 export const runtime = "nodejs";
 // Google polls iCal feeds infrequently; let edge caches hold for a few mins.
@@ -40,14 +41,6 @@ const VALID_TYPES: EventType[] = [
   "holiday_work",
   "holidays",
 ];
-
-const LEAVE_TYPE_LABELS: Record<string, string> = {
-  annual: "Annual Leave",
-  sick: "Sick Leave",
-  personal: "Personal Leave",
-  unpaid: "Unpaid Leave",
-  other: "Leave",
-};
 
 const SCOPE_LABELS: Record<Scope, string> = {
   me: "Me",

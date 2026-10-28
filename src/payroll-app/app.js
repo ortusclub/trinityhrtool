@@ -518,6 +518,11 @@
     }).join('');
 
     $('#runBody').innerHTML = body;
+    // Read-only: every change comes in through Import payroll files.
+    Array.prototype.forEach.call($('#runBody').querySelectorAll('input, select, textarea'), function (i) {
+      i.disabled = true;
+      if (!i.title) i.title = 'Change it in the payroll template and import it (Import payroll files).';
+    });
     applySort('run');
 
     var sum = {};
@@ -984,7 +989,7 @@
 
   function applyPayroll(plan, fileCount) {
     var T = window.PayrollTemplate;
-    var perPeriod = {}, ratesFilled = [], rateChanges = [], latestRate = {};
+    var perPeriod = {}, ratesFilled = [], rateChanges = [], latestRate = {}, newRates = [];
     var postedRows = 0, inputRows = 0, removedRows = 0, lastSeen = {}, latestCutoff = null;
 
     plan.added.forEach(function (e) { state.employees.push(e); });
@@ -1025,7 +1030,8 @@
       } else {
         delete d.posted;
         T.COLUMNS.forEach(function (c) {
-          if (!c.input || c.input === 'remarks' || c.input === 'bonusDetails' || c.input === 'otherDeduction') return;
+          if (!c.input || c.input === 'remarks' || c.input === 'bonusDetails' || c.input === 'otherDeduction' ||
+              c.input === 'newRate' || c.input === 'newRateDate') return;
           if (v[c.key] === undefined) delete d[c.input];
           else d[c.input] = v[c.key];
         });
@@ -1051,6 +1057,30 @@
           rateChanges.push((emp.lastName || '') + ', ' + (emp.firstName || '') + ': ' +
             plain(E.num(emp.monthlyRate)) + ' → ' + plain(v.rate));
           emp.monthlyRate = v.rate;
+        }
+        /* NEW RATE + its date: before this cutoff, the rate changes now and the
+           back pay since then is paid here; inside or after it, it is kept as
+           an adjustment the run splits by working days or holds till its date. */
+        if (v.newRate) {
+          var eff = T.toDate(row.newRateDate), was = E.num(emp.monthlyRate), diff = E.r2(v.newRate - was);
+          var who = (emp.lastName || '') + ', ' + (emp.firstName || '');
+          if (!eff) newRates.push(who + ': NEW RATE ' + plain(v.newRate) + ' has no effective date \u2014 not applied');
+          else if (diff && eff < period.start) {
+            var bp = E.backPayFor(emp, eff, was, v.newRate, period, state.settings);
+            emp.backPay = bp.amount ? { periodId: period.id, amount: bp.amount, from: bp.from, to: bp.to,
+              oldRate: bp.oldRate, newRate: bp.newRate, rows: bp.rows } : undefined;
+            if (!emp.backPay) delete emp.backPay;
+            emp.monthlyRate = v.newRate;
+            emp.salaryAdjustment = 0;
+            emp.salaryAdjustmentEffective = null;
+            newRates.push(who + ': ' + plain(was) + ' \u2192 ' + plain(v.newRate) + ' from ' + eff +
+              (bp.amount ? ', back pay ' + plain(bp.amount) + ' in this cutoff' : ''));
+          } else if (diff) {
+            emp.salaryAdjustment = diff;
+            emp.salaryAdjustmentEffective = eff;
+            newRates.push(who + ': ' + plain(was) + ' \u2192 ' + plain(v.newRate) + ' from ' + eff +
+              (eff <= period.end ? ' (split by working days this cutoff)' : ' (waits till then)'));
+          }
         }
         inputRows++;
       }
@@ -1128,6 +1158,7 @@
     if (inputRows) msg.push(inputRows + ' row(s) for upcoming payouts: the typed columns were taken and the site computed the rest.');
     if (ratesFilled.length) msg.push('\nMonthly rate filled in for ' + ratesFilled.length +
       ' employee(s) who had none, from their latest cutoff in the files.');
+    if (newRates.length) msg.push('\nSalary changes (NEW RATE):\n  ' + newRates.join('\n  '));
     if (rateChanges.length) msg.push('\nCurrent monthly rate changed for ' + rateChanges.length + ':\n  ' +
       rateChanges.slice(0, 8).join('\n  ') + (rateChanges.length > 8 ? '\n  …' : ''));
     if (plan.added.length) msg.push('\nAdded ' + plan.added.length + ' employee(s) who are in the payroll ' +

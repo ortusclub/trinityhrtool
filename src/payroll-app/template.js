@@ -33,6 +33,9 @@
     { head: 'POSITION', key: 'position', width: 24 },
     { head: 'DEPARTMENT', key: 'department', width: 18 },
     { head: 'EMPLOYEE RATE', key: 'rate', width: 13 },
+    // A salary change: the new monthly rate and the date it takes effect.
+    { head: 'NEW RATE', key: 'newRate', input: 'newRate', width: 13 },
+    { head: 'NEW RATE EFFECTIVE DATE', key: 'newRateDate', input: 'newRateDate', width: 14 },
     { head: 'PAY PERIOD', key: 'payPeriod', width: 8 },
     { head: 'REGULAR PAY', key: 'regularPay', width: 13, alias: ['BASIC PAY'] },
     { head: 'REGULAR OVERTIME', key: 'otHours', input: 'otHours', width: 11,
@@ -83,7 +86,7 @@
     { head: 'EC', key: 'ec', width: 8 },
     { head: 'Remarks', key: 'remarks', input: 'remarks', width: 30 }
   ];
-  var TEXT_KEYS = { id: 1, name: 1, position: 1, department: 1, remarks: 1, bonusDetails: 1 };
+  var TEXT_KEYS = { id: 1, name: 1, position: 1, department: 1, remarks: 1, bonusDetails: 1, newRateDate: 1 };
 
   /* Columns the company's payroll files have carried at one time or another
      that this layout does not: read from past files so the record is whole,
@@ -127,6 +130,13 @@
       var hourly = '(' + daily + '/' + hpd + ')';
       var e = s.earnings, c = s.contributions, er = c.employer, d = s.dtr, p = s.postTax;
       var rf = s.employee.employmentClass !== 'manager';
+      // A salary change on file: pending or splitting this cutoff, or the back pay it carries.
+      var em = s.employee, pending = null;
+      if (Number(em.salaryAdjustment) && em.salaryAdjustmentEffective) {
+        pending = { rate: E2(Number(em.monthlyRate) + Number(em.salaryAdjustment)), date: em.salaryAdjustmentEffective };
+      } else if (em.backPay && em.backPay.periodId === period.id) {
+        pending = { rate: em.backPay.newRate, date: em.backPay.from };
+      }
       var n = function (v) { return { v: Number(v) || 0, t: 'n', s: S.NUM }; };
       var inp = function (v) {
         return v ? { v: Number(v), t: 'n', s: S.INPUT } : { v: '', t: 's', s: S.INPUT };
@@ -156,7 +166,10 @@
         name: { v: (s.employee.lastName || '') + ', ' + (s.employee.firstName || ''), t: 's' },
         position: { v: s.employee.position || '', t: 's' },
         department: { v: s.employee.department || '', t: 's' },
-        rate: n(s.rates.monthly),
+        // The rate on file; a change shows in NEW RATE with its date.
+        rate: n(s.rates.baseMonthly),
+        newRate: pending ? inp(pending.rate) : inp(0),
+        newRateDate: { v: pending ? pending.date : '', t: 's', s: S.INPUT },
         payPeriod: { v: period.payPeriodNo, t: 'n', s: S.INT },
         // A raise that lands mid-cutoff splits basic by days — a value then.
         regularPay: s.adjustment && s.adjustment.prorated ? n(s.rates.semiMonthly)
@@ -554,6 +567,7 @@
 
   global.PayrollTemplate = {
     parseFinalPay: parseFinalPay,
+    toDate: finalPayDate,
     build: buildWorkbook,
     parse: parseWorkbook,
     readCutoff: readCutoff,

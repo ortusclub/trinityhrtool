@@ -2586,16 +2586,33 @@
      the shared settings). Two files, as Wise is paid: EUR, and every other
      currency together ("PHP USD"); anyone with
      no remembered recipient still gets a row, listed to fill in. The
-     reference is initials + the payroll's MMYYYY, as in past Wise files. */
+     reference is initials + the payroll's MMYYYY, as in past Wise files.
+
+     Some people are paid into two accounts. A Wise CSV with a note in the
+     column after receiverType sets that up: rows with the same email are
+     one person's accounts, and each note says what that account gets —
+     "gross salary", "half of gross salary" / "other half", "commission and
+     other payments" (what's left of net pay), or the salary "converted"
+     (sent as the source currency, so Wise converts it). */
   var WISE_HEAD = ['recipientId', 'name', 'recipientEmail', 'recipientDetail', 'sourceCurrency', 'targetCurrency',
     'amountCurrency', 'amount', 'paymentReference', 'referenceNumber', 'receiverType'];
   function wiseKey(v) {
     return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]+/g, ' ').trim();
   }
   function wiseRecipients() { return state.settings.wise.recipients || {}; }
+  function wiseSplits() { return state.settings.wise.splits || {}; }
   function wiseShowSummary() {
-    var n = Object.keys(wiseRecipients()).length;
-    $('#wiseSummary').textContent = n ? n + ' Wise recipient(s) remembered.' : 'No Wise recipients remembered yet.';
+    var n = Object.keys(wiseRecipients()).length, sp = Object.keys(wiseSplits()).length;
+    $('#wiseSummary').textContent = (n ? n + ' Wise recipient(s) remembered.' : 'No Wise recipients remembered yet.') +
+      (sp ? ' ' + sp + ' paid into more than one account.' : '');
+  }
+  /** A split row's note → what that account gets. */
+  function wisePart(note) {
+    if (/convert/i.test(note)) return 'salarySource';
+    if (/half/i.test(note)) return 'half';
+    if (/commission|other/i.test(note)) return 'rest';
+    if (/salary/i.test(note)) return 'salary';
+    return 'rest';
   }
   function wiseLoad() {
     var f = $('#wiseFile').files[0];
@@ -2607,10 +2624,16 @@
       if (head.indexOf('recipientId') === -1 || head.indexOf('recipientEmail') === -1) {
         throw new Error('Not a Wise bulk CSV: it needs recipientId and recipientEmail columns.');
       }
-      var found = {};
+      var found = {}, splits = {}, noteAt = head.indexOf('receiverType') + 1;
       rows.slice(1).forEach(function (r) {
         var email = col(r, 'recipientEmail').toLowerCase(), id = col(r, 'recipientId');
         if (!email || !id) return;
+        var note = noteAt > 0 ? String(r[noteAt] === null || r[noteAt] === undefined ? '' : r[noteAt]).trim() : '';
+        if (note) {
+          (splits[email] = splits[email] || []).push({ id: id, name: col(r, 'name'), detail: col(r, 'recipientDetail'),
+            type: col(r, 'receiverType') || 'PERSON', currency: col(r, 'targetCurrency').toUpperCase(), part: wisePart(note) });
+          return;
+        }
         // Someone with two recipients: keep the one their salary went to.
         var salary = /^[A-Z]+\d+ - Salary$/i.test(col(r, 'paymentReference'));
         if (found[email] && !(salary && !found[email].salary)) return;
@@ -2619,14 +2642,23 @@
         found[email] = { id: id, name: col(r, 'name'), detail: col(r, 'recipientDetail'),
           type: col(r, 'receiverType') || 'PERSON', initials: initials.toUpperCase(), salary: salary };
       });
-      var emails = Object.keys(found);
-      if (!emails.length) throw new Error('No rows with both a recipientId and a recipientEmail.');
-      var all = wiseRecipients();
-      emails.forEach(function (e) { delete found[e].salary; all[e] = found[e]; });
+      var emails = Object.keys(found), splitEmails = Object.keys(splits);
+      if (!emails.length && !splitEmails.length) throw new Error('No rows with both a recipientId and a recipientEmail.');
+      var all = wiseRecipients(), allSplits = wiseSplits();
+      emails.forEach(function (e) {
+        delete found[e].salary;
+        if (!found[e].initials && all[e]) found[e].initials = all[e].initials;   // a file without references keeps them
+        all[e] = found[e];
+      });
+      // A split file replaces that person's accounts; one row alone isn't a split.
+      splitEmails.forEach(function (e) { if (splits[e].length > 1) allSplits[e] = splits[e]; });
       state.settings.wise.recipients = all;
+      state.settings.wise.splits = allSplits;
       Store.saveSettings(state.settings);
       wiseShowSummary();
-      $('#wiseSummary').textContent += ' Loaded ' + emails.length + ' from ' + f.name + '.';
+      $('#wiseSummary').textContent += ' Loaded ' + (emails.length ? emails.length + ' recipient(s)' : '') +
+        (emails.length && splitEmails.length ? ' and ' : '') +
+        (splitEmails.length ? splitEmails.length + ' split(s)' : '') + ' from ' + f.name + '.';
     }).catch(function (err) {
       $('#wiseSummary').textContent = err.message;
     }).then(function () { $('#wiseFile').value = ''; });
@@ -2644,8 +2676,15 @@
       });
       var roster = {};
       state.employees.forEach(function (emp) { if (emp.email) roster[String(emp.email).trim().toLowerCase()] = emp; });
+      // Remembered recipients know their email, for finding a split.
+      Object.keys(rec).forEach(function (e) { rec[e].email = e; });
+      var splits = wiseSplits();
       var recipientOf = function (p) {
         var email = (p.email || '').toLowerCase(), emp = roster[email];
+        if (splits[email]) return { email: email, id: splits[email][0].id, name: splits[email][0].name };
+        if (emp && emp.personalEmail && splits[String(emp.personalEmail).trim().toLowerCase()]) {
+          return { email: String(emp.personalEmail).trim().toLowerCase() };
+        }
         return rec[email] ||
           (emp && emp.personalEmail && rec[String(emp.personalEmail).trim().toLowerCase()]) ||
           rec[byName[wiseKey(p.name)]] ||
@@ -2660,17 +2699,43 @@
         return (r && r.initials) || (String(p.code).match(/^[A-Za-z]+/) || [''])[0].toUpperCase() ||
           wiseKey(p.name).split(' ').map(function (w) { return w.charAt(0); }).join('').toUpperCase();
       };
-      var files = {}, missing = [], viaBpi = [];
+      var files = {}, missing = [], viaBpi = [], split = [];
       d.payslips.slice().sort(function (x, y) { return x.name.localeCompare(y.name); }).forEach(function (p) {
         var r = recipientOf(p), emp = roster[(p.email || '').toLowerCase()];
         // PHP with no Wise recipient but a BPI account is paid through BPI.
         if (!r && p.currency === 'PHP' && emp && isBpi(emp)) { viaBpi.push(p.name + ', ' + psMoney(p.net_pay, 'PHP')); return; }
         if (!r) missing.push(p.name + ' (' + p.currency + ')');
-        var file = p.currency === 'EUR' ? 'EUR' : 'other';
-        (files[file] = files[file] || []).push([
-          r ? r.id : '', r ? r.name : p.name, p.email || '', r ? r.detail : '', source, p.currency,
-          'target', String(E.r2(p.net_pay)), initials(p, r) + when + ' - Salary', '', r ? r.type : 'PERSON'
-        ]);
+        var add = function (a, currency, amountCurrency, amount) {
+          var file = currency === 'EUR' ? 'EUR' : 'other';
+          (files[file] = files[file] || []).push([
+            a ? a.id : '', a ? a.name : p.name, p.email || '', a ? a.detail : '', source, currency,
+            amountCurrency, String(E.r2(amount)), initials(p, r && rec[r.email]) + when + ' - Salary', '', a ? a.type : 'PERSON'
+          ]);
+        };
+        var parts = r && splits[r.email], salary = E.r2(p.salary || 0), net = E.r2(p.net_pay);
+        if (!parts || !(salary > 0) || salary > net) {
+          if (parts) split.push(p.name + ': no salary line to split by, so all of it went to one account');
+          add(parts ? parts[0] : r, p.currency, 'target', net);
+          return;
+        }
+        // The salary parts first, then whatever is left of net pay.
+        var halves = 0, given = 0, rest = [];
+        parts.forEach(function (a) {
+          var amt;
+          if (a.part === 'salary') amt = salary;
+          else if (a.part === 'half') amt = halves++ ? E.r2(salary - E.r2(salary / 2)) : E.r2(salary / 2);   // the second takes the odd cent
+          else if (a.part === 'salarySource') {
+            if (p.currency !== source) { split.push(p.name + ': can\u2019t send the ' + p.currency + ' salary as ' + source + '; check ' + a.name + '\u2019s row'); }
+            add(a, a.currency || p.currency, 'source', salary);
+            given += salary;
+            return;
+          } else { rest.push(a); return; }
+          add(a, a.currency || p.currency, 'target', amt);
+          given += amt;
+        });
+        var left = E.r2(net - given);
+        if (rest.length) add(rest[0], rest[0].currency || p.currency, 'target', left);
+        else if (left) split.push(p.name + ': ' + psMoney(left, p.currency) + ' beyond the salary has no account for it \u2014 add it to a row');
       });
       // The non-EUR file is named by what's in it, "PHP USD".
       var nameOf = function (f) {
@@ -2692,6 +2757,7 @@
         }, i * 600);
       });
       var msg = [curs.map(function (c) { return files[c].length + ' in ' + nameOf(c); }).join(', ') + ' \u2014 one Wise CSV each.'];
+      if (split.length) msg.push('\nSplit pay to check:\n  ' + split.join('\n  '));
       if (viaBpi.length) msg.push('\nNot in Wise \u2014 PHP to their BPI account (' + viaBpi.length + '):\n  ' + viaBpi.join('\n  '));
       if (missing.length) msg.push('\nNo Wise recipient remembered for these, so their recipientId is blank \u2014 fill it in, ' +
         'or load a Wise CSV that has them (' + missing.length + '):\n  ' + missing.join('\n  '));

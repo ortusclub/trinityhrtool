@@ -22,7 +22,8 @@
     // and each person's Wise recipient, remembered from a Wise CSV by email.
     wise: {
       sourceCurrency: 'USD',
-      recipients: {}             // email → { id, name, detail, type }
+      recipients: {},            // email → { id, name, detail, type, initials }
+      splits: {}                 // email → [{ id, name, detail, type, currency, part }], pay over several accounts
     },
 
     // Work schedule: Mon-Fri, 10:00AM - 7:00PM (1 hour unpaid meal break)

@@ -44,6 +44,10 @@
     { head: 'QUARTERLY BONUS TAXABLE', key: 'quarterlyBonus', input: 'quarterlyBonus', width: 12 },
     // What the bonus is for, printed under it on the payslip.
     { head: 'QUARTERLY BONUS DETAILS', key: 'bonusDetails', input: 'bonusDetails', width: 28 },
+    // Back pay of a backdated raise (worked out on the site from the new rate
+    // and its date); older files' salary adjustment column reads into it.
+    { head: 'SALARY ADJ (BACK PAY)', key: 'salaryAdj', width: 13,
+      alias: ['ADHOC PAYMENT - SALARY ADJ', 'ADHOC PAYMENT - SALARY ADJUSTMENT', 'SALARY ADJ', 'SALARY ADJUSTMENT'] },
     { head: 'TRAVEL ALLOWANCE', key: 'travel', input: 'transportationAllowance', width: 12,
       alias: ['TRANSPORTATION ALLOWANCE'] },
     { head: 'DAYS ABSENT', key: 'absentDays', input: 'absentDays', width: 9 },
@@ -90,7 +94,6 @@
     { key: 'thirteenthTaxable', test: /^(ADHOC PAYMENT - )?13TH MONTH( PAY)? TAXABLE$/ },
     { key: 'exMilestones', test: /^EX MILESTONES?$/ },
     { key: 'basicAdj', test: /^(ADHOC PAYMENT - )?BASIC ADJ(USTMENT)?$/ },
-    { key: 'salaryAdj', test: /^(ADHOC PAYMENT - )?SALARY ADJ(USTMENT)?$/ },
     { key: 'taxRefund', test: /^TAX REFUND/ },
     { key: 'reimbursement', test: /^REIMBURSEMENTS?$/ }
   ];
@@ -136,8 +139,11 @@
          with the site. SSS loan amortisations sit in SSS LOAN; other loans
          and recurring deductions in OTHER DEDUCTION. The import takes
          both back out. */
+      var backPay = E2((e.taxableAllowances || []).reduce(function (t, a) {
+        return /back pay|^salary adjustment$/i.test(a.label) ? t + a.amount : t;
+      }, 0));
       var extraGross = E2(e.otPayRestSpecial + e.otPayRegHoliday + e.restDayPay + e.holidayPay +
-        e.thirteenthMonth + e.totalTaxableAllowance + e.totalNonTaxAllowance);
+        e.thirteenthMonth + e.totalTaxableAllowance - backPay + e.totalNonTaxAllowance);
       var extraNonTax = E2(e.totalNonTaxAllowance + e.thirteenthExempt);
       var extraNet = E2(p.reimbursement + p.taxRefund);
       var autoOther = E2(p.otherLoanAuto + s.totalOtherDeductions);
@@ -162,6 +168,7 @@
         deMinimis: n(e.deMinimisAuto.full),
         quarterlyBonus: inp(e.quarterlyBonus),
         bonusDetails: { v: e.quarterlyBonusDetails || '', t: 's', s: S.INPUT },
+        salaryAdj: n(backPay),
         travel: inp(e.transportationGiven),
         absentDays: inp(d.absentDays + d.unpaidLeaveDays),
         absenceDeduction: f('ROUND(' + daily + '*' + C('absentDays') + ',2)'),
@@ -173,7 +180,7 @@
         dmDeduction: n(e.deMinimisDeduction),
         travelDeduction: inp(e.travelDeduction),
         gross: f(C('regularPay') + '+' + C('otPay') + '+' + C('ndPay') + '+' + C('deMinimis') + '+' +
-          C('quarterlyBonus') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
+          C('quarterlyBonus') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
           C('lateDeduction') + '-' + C('undertimeDeduction') + '-' + C('prorationDeduction') + '-' +
           C('dmDeduction') + '-' + C('travelDeduction') + (extraGross ? '+' + extraGross : '')),
         sss: n(c.sss), phic: n(c.philhealth), hdmf: n(c.pagibig),

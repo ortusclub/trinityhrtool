@@ -2593,8 +2593,8 @@
      one person's accounts, and each note says what that account gets —
      "gross salary", "half of gross salary" / "other half", "commission and
      other payments" (what's left of net pay; with no such account, the
-     first half account gets it), or the salary "converted" (sent as the
-     source currency, so Wise converts it). */
+     first half account gets it), or the salary "converted" (to that
+     account's currency at OANDA's rate for the payout date). */
   var WISE_HEAD = ['recipientId', 'name', 'recipientEmail', 'recipientDetail', 'sourceCurrency', 'targetCurrency',
     'amountCurrency', 'amount', 'paymentReference', 'referenceNumber', 'receiverType'];
   function wiseKey(v) {
@@ -2664,8 +2664,25 @@
       $('#wiseSummary').textContent = err.message;
     }).then(function () { $('#wiseFile').value = ''; });
   }
+  /** OANDA rates for salaries a split sends in another currency, on the payout date: { 'USDPHP': 63.38 }. */
+  function wiseRates(d, b) {
+    var to = {}, from = {}, rates = {};
+    Object.keys(wiseSplits()).forEach(function (e) {
+      wiseSplits()[e].forEach(function (a) { if (a.part === 'salarySource' && a.currency) to[a.currency] = 1; });
+    });
+    d.payslips.forEach(function (p) { from[p.currency] = 1; });
+    var pairs = [];
+    Object.keys(from).forEach(function (f) { Object.keys(to).forEach(function (t) { if (f !== t) pairs.push([f, t]); }); });
+    return Promise.all(pairs.map(function (pr) {
+      return psApi('fx?base=' + pr[0] + '&quote=' + pr[1] + '&date=' + b.payout_date)
+        .then(function (r) { rates[pr[0] + pr[1]] = r.rate; }, function () { /* listed as missing */ });
+    })).then(function () { return rates; });
+  }
   function wiseExport(b) {
     psApi('payslips?batch=' + encodeURIComponent(b.id)).then(function (d) {
+      return wiseRates(d, b).then(function (rates) { return { d: d, rates: rates }; });
+    }).then(function (x) {
+      var d = x.d, rates = x.rates;
       // Wise often has someone's personal email, so after the work email try
       // the roster's personal email, then first + last name.
       var rec = wiseRecipients(), byName = {}, byFirstLast = {};
@@ -2721,24 +2738,32 @@
         }
         // The salary parts first, then whatever is left of net pay: to the
         // "commission and other payments" account, else the first half account.
+        // amt counts against net pay; sent is what goes in the file, in the account's currency.
         var halves = 0, given = 0, out = [], restAt = -1, firstHalf = -1;
         parts.forEach(function (a) {
-          var amt, cur = 'target';
+          var amt, currency = a.currency || p.currency, sent = null;
           if (a.part === 'salary') amt = salary;
           else if (a.part === 'half') {
             if (firstHalf === -1) firstHalf = out.length;
             amt = halves++ ? E.r2(salary - E.r2(salary / 2)) : E.r2(salary / 2);   // the second takes the odd cent
           } else if (a.part === 'salarySource') {
-            if (p.currency !== source) split.push(p.name + ': can\u2019t send the ' + p.currency + ' salary as ' + source + '; check ' + a.name + '\u2019s row');
-            amt = salary; cur = 'source';
+            // The salary, converted to this account's currency at OANDA's rate.
+            amt = salary;
+            if (currency !== p.currency) {
+              var rate = rates[p.currency + currency];
+              if (rate) sent = E.r2(salary * rate);
+              else { split.push(p.name + ': no ' + p.currency + '\u2192' + currency + ' rate, so ' + a.name + '\u2019s row is in ' + p.currency); currency = p.currency; }
+            }
           } else { if (restAt === -1) restAt = out.length; amt = 0; }
-          out.push({ a: a, cur: cur, amt: amt });
+          out.push({ a: a, currency: currency, amt: amt, sent: sent });
           given += amt;
         });
         var left = E.r2(net - given), to = restAt !== -1 ? restAt : firstHalf;
         if (left && to !== -1) out[to].amt = E.r2(out[to].amt + left);
         else if (left) split.push(p.name + ': ' + psMoney(left, p.currency) + ' beyond the salary has no account for it \u2014 add it to a row');
-        out.forEach(function (o) { if (o.amt > 0) add(o.a, o.a.currency || p.currency, o.cur, o.amt); });   // nothing to pay: no row
+        out.forEach(function (o) {
+          if (o.amt > 0) add(o.a, o.currency, 'target', o.sent === null ? o.amt : o.sent);   // nothing to pay: no row
+        });
       });
       // The non-EUR file is named by what's in it, "PHP USD".
       var nameOf = function (f) {
@@ -2760,6 +2785,9 @@
         }, i * 600);
       });
       var msg = [curs.map(function (c) { return files[c].length + ' in ' + nameOf(c); }).join(', ') + ' \u2014 one Wise CSV each.'];
+      Object.keys(rates).forEach(function (k) {
+        msg.push('Converted at OANDA ' + k.slice(0, 3) + '\u2192' + k.slice(3) + ' ' + rates[k] + ' (for ' + psDay(b.payout_date) + ').');
+      });
       if (split.length) msg.push('\nSplit pay to check:\n  ' + split.join('\n  '));
       if (viaBpi.length) msg.push('\nNot in Wise \u2014 PHP to their BPI account (' + viaBpi.length + '):\n  ' + viaBpi.join('\n  '));
       if (missing.length) msg.push('\nNo Wise recipient remembered for these, so their recipientId is blank \u2014 fill it in, ' +

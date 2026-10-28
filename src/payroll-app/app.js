@@ -701,7 +701,7 @@
      person: BPI account, net pay, remarks. Only BPI accounts can go in it,
      so anyone else is listed after the download to be paid another way. */
   function isBpi(emp) {
-    return /\bbpi\b|philippine islands/i.test(emp.bankName || '');
+    return /\bbpi\b|philippine island/i.test(emp.bankName || '');
   }
   function exportBpi() {
     var funding = String(state.settings.company.bpiFundingAccount || '').replace(/\D/g, '');

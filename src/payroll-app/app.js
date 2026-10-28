@@ -2717,7 +2717,7 @@
         return (r && r.initials) || (String(p.code).match(/^[A-Za-z]+/) || [''])[0].toUpperCase() ||
           wiseKey(p.name).split(' ').map(function (w) { return w.charAt(0); }).join('').toUpperCase();
       };
-      var files = {}, missing = [], viaBpi = [], split = [];
+      var files = {}, missing = [], viaBpi = [], split = [], used = {};
       d.payslips.slice().sort(function (x, y) { return x.name.localeCompare(y.name); }).forEach(function (p) {
         var r = recipientOf(p), emp = roster[(p.email || '').toLowerCase()];
         // PHP with no Wise recipient but a BPI account is paid through BPI.
@@ -2751,7 +2751,7 @@
             amt = salary;
             if (currency !== p.currency) {
               var rate = rates[p.currency + currency];
-              if (rate) sent = E.r2(salary * rate);
+              if (rate) { sent = E.r2(salary * rate); used[p.currency + currency] = rate; }
               else { split.push(p.name + ': no ' + p.currency + '\u2192' + currency + ' rate, so ' + a.name + '\u2019s row is in ' + p.currency); currency = p.currency; }
             }
           } else { if (restAt === -1) restAt = out.length; amt = 0; }
@@ -2785,8 +2785,8 @@
         }, i * 600);
       });
       var msg = [curs.map(function (c) { return files[c].length + ' in ' + nameOf(c); }).join(', ') + ' \u2014 one Wise CSV each.'];
-      Object.keys(rates).forEach(function (k) {
-        msg.push('Converted at OANDA ' + k.slice(0, 3) + '\u2192' + k.slice(3) + ' ' + rates[k] + ' (for ' + psDay(b.payout_date) + ').');
+      Object.keys(used).forEach(function (k) {
+        msg.push('Converted at OANDA ' + k.slice(0, 3) + '\u2192' + k.slice(3) + ' ' + used[k] + ' (for ' + psDay(b.payout_date) + ').');
       });
       if (split.length) msg.push('\nSplit pay to check:\n  ' + split.join('\n  '));
       if (viaBpi.length) msg.push('\nNot in Wise \u2014 PHP to their BPI account (' + viaBpi.length + '):\n  ' + viaBpi.join('\n  '));

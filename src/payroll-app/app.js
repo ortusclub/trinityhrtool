@@ -698,8 +698,9 @@
   /* ------------------------- BPI bank file (.xls) -------------------------
      BPI BizLink's "Pay BPI Accounts — Lumpsum" upload: an H row with the
      totals and the funding account, a header row, then one D row per
-     person: BPI account, net pay, remarks, and the name in H. Only BPI accounts can go in it,
-     so anyone else is listed after the download to be paid another way. */
+     person: BPI account, net pay, remarks, and the name in H. Everyone with
+     net pay goes in, even without a 10-digit BPI account; those rows are
+     listed after the download to fix in the file before uploading. */
   function isBpi(emp) {
     return /\bbpi\b|philippine island/i.test(emp.bankName || '');
   }
@@ -710,16 +711,16 @@
       return;
     }
     var remarks = 'Salary ' + window.PayrollTemplate.cutoffTitle(state.period);
-    var rows = [], skipped = [];
+    var rows = [], check = [];
     state.run.slips.forEach(function (s) {
       var emp = s.employee, who = emp.lastName + ', ' + emp.firstName;
       var acct = String(emp.bankAccountNo || '').replace(/\D/g, ''), net = E.r2(s.totals.netPay);
       if (!(net > 0)) return;
-      if (!isBpi(emp)) skipped.push(who + ' \u2014 ' + (emp.bankName || 'no bank') + ', ' + peso(net));
-      else if (acct.length !== 10) skipped.push(who + ' \u2014 BPI account number is not 10 digits, ' + peso(net));
-      else rows.push({ acct: acct, net: net, name: who });
+      if (!isBpi(emp)) check.push(who + ' \u2014 ' + (emp.bankName || 'no bank') + ', ' + peso(net));
+      else if (acct.length !== 10) check.push(who + ' \u2014 BPI account number is not 10 digits, ' + peso(net));
+      rows.push({ acct: acct, net: net, name: who });
     });
-    if (!rows.length) { alert('Nobody on this cutoff has a BPI account and net pay to send.'); return; }
+    if (!rows.length) { alert('Nobody on this cutoff has net pay to send.'); return; }
 
     window.XlsxWriter.loadSheetJs().then(function (XL) {
       var total = E.r2(rows.reduce(function (t, r) { return t + r.net; }, 0));
@@ -747,9 +748,9 @@
       var out = XL.write(wb, { bookType: 'biff8', type: 'array' });
       window.XlsxWriter.download(new Blob([out], { type: 'application/vnd.ms-excel' }),
         'BizLink_Pay BPI Accounts Lumpsum - ' + state.period.id + '.xls');
-      if (skipped.length) {
-        alert(rows.length + ' BPI account(s), ' + peso(total) + ', are in the file.\n\nNot in it \u2014 pay these another way (' +
-          skipped.length + '):\n  ' + skipped.join('\n  '));
+      if (check.length) {
+        alert(rows.length + ' people, ' + peso(total) + ', are in the file.\n\nCheck these rows before uploading \u2014 ' +
+          'BizLink may reject them (' + check.length + '):\n  ' + check.join('\n  '));
       }
     }).catch(function (err) { alert('Could not make the BPI file.\n\n' + err.message); });
   }

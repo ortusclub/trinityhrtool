@@ -1532,7 +1532,7 @@
       return (isDate(e.endDate) && e.endDate >= from) || (e.finalPay && e.finalPay.periodId);
     }).sort(function (a, b) { return String(b.endDate).localeCompare(String(a.endDate)); });
     if (!people.length) {
-      $('#fpBody').innerHTML = '<tr><td colspan="9" class="muted" style="padding:18px">Nobody has a last day of work set. ' +
+      $('#fpBody').innerHTML = '<tr><td colspan="10" class="muted" style="padding:18px">Nobody has a last day of work set. ' +
         'Set it on the Employees tab, and they show here.</td></tr>';
       return;
     }
@@ -1556,9 +1556,11 @@
       var head = '<td class="sticky-col"><strong>' + esc(emp.lastName + ', ' + emp.firstName) + '</strong>' +
         '<div class="muted" style="font-size:11.5px">' + id + '</div></td>' +
         '<td>' + esc(emp.endDate || '\u2014') + '</td><td>' + sel + '</td>';
-      if (cfg.recorded) return '<tr>' + head + fpRecordedCells(emp, cfg) + '</tr>';
+      var note = cfg.periodId ? '<td><textarea data-fp-note="' + id + '" rows="2" style="width:260px;font:inherit;font-size:12.5px" ' +
+        'placeholder="Note">' + esc(cfg.note || '') + '</textarea></td>' : '<td></td>';
+      if (cfg.recorded) return '<tr>' + head + fpRecordedCells(emp, cfg) + note + '</tr>';
       var fp = cfg.periodId ? E.finalPayFor(emp, state.dtr, state.settings) : null;
-      if (!fp) return '<tr>' + head + '<td colspan="6" class="muted">Choose the cutoff to work out their final pay.</td></tr>';
+      if (!fp) return '<tr>' + head + '<td colspan="6" class="muted">Choose the cutoff to work out their final pay.</td>' + note + '</tr>';
 
       var d = state.dtr[fp.period.id + '|' + emp.id];
       var posted = E.isPostedPeriod(state.dtr, fp.period.id);
@@ -1579,7 +1581,7 @@
           ' on ' + plain(fp.annualTaxable) + ', withheld ' + plain(fp.ytdWithheld) + '</div></td>' +
         '<td class="num">' + box(emp, 'loans') + plain(fp.loanBalance) + '</td>' +
         '<td class="num">' + plain(fp.clearanceTotal) + '</td>' +
-        '<td class="num strong">' + (posted && d && d.posted ? '<span class="muted">from the payroll file</span>' : plain(slip.totals.netPay)) + '</td></tr>';
+        '<td class="num strong">' + (posted && d && d.posted ? '<span class="muted">from the payroll file</span>' : plain(slip.totals.netPay)) + '</td>' + note + '</tr>';
       var notes = posted
         ? '<div class="notice warn" style="margin:0 0 8px">This cutoff came from an imported payroll file, so the final pay ' +
           'is not added to it. Choose a later cutoff, or use Recalculate this cutoff instead on Payroll Run.</div>' : '';
@@ -1591,7 +1593,7 @@
           esc(amountValue(c.amount)) + '" placeholder="0.00" style="width:110px;text-align:right">' +
           '<button class="btn ghost tiny danger" data-fp-cl-del="' + i + '" data-fp-emp="' + id + '" type="button">Remove</button></div>';
       }).join('');
-      return row + '<tr class="fp-detail"><td></td><td colspan="8">' + notes +
+      return row + '<tr class="fp-detail"><td></td><td colspan="9">' + notes +
         '<strong style="font-size:12.5px">Clearance deductions</strong>' +
         '<div style="margin-top:6px">' + clear + '</div>' +
         '<button class="btn ghost tiny" data-fp-cl-add="' + id + '" type="button">+ Add clearance deduction</button></td></tr>';
@@ -1642,13 +1644,29 @@
           }
           if (seen[emp.id] && seen[emp.id].weight >= weight) {
             problems.push(p.name + ': also in ' + x.file.name + ' \u2014 kept ' + seen[emp.id].file);
+            emp.finalPay.note = [emp.finalPay.note, 'Also has a Final Pay tab in ' + x.file.name.replace(/\.xlsx?$/i, '') +
+              '; recorded here, where the register paid the 13th month and refund.'].filter(Boolean).join(' ');
             return;
           }
-          if (seen[emp.id]) problems.push(p.name + ': also in ' + seen[emp.id].file + ' \u2014 kept ' + x.file.name);
+          var also = seen[emp.id] ? seen[emp.id].file : null;
+          if (also) problems.push(p.name + ': also in ' + also + ' \u2014 kept ' + x.file.name);
           seen[emp.id] = { weight: weight, file: x.file.name };
+          /* Said on the row: where the register paid something other than
+             the Final Pay tab, and a second file with a Final Pay tab. */
+          var auto = [];
+          if (posted && posted.posted && Math.abs(slip.totals.netPay - p.net) > 0.005) {
+            auto.push('The Final Pay tab says net ' + plain(p.net) + '; the register paid ' + plain(slip.totals.netPay) +
+              (slip.totals.netPay < 0 ? ' (owed by the employee, recovered in that cutoff)' : '') + '.');
+          }
+          // A note someone wrote stays; one this recording wrote is redone.
+          var keepNote = emp.finalPay && emp.finalPay.note && !emp.finalPay.autoNote ? emp.finalPay.note : '';
           emp.finalPay = { periodId: period.id, recorded: {
             thirteenth: p.thirteenth, taxRefund: p.taxRefund, net: p.net,
             source: x.file.name.replace(/\.xlsx?$/i, '') + ' \u00b7 ' + p.sheet } };
+          var autoNote = auto.concat(also ? ['Also has a Final Pay tab in ' + also.replace(/\.xlsx?$/i, '') +
+            '; recorded here, where the register paid the 13th month and refund.'] : []).join(' ');
+          if (keepNote) emp.finalPay.note = keepNote;
+          else if (autoNote) { emp.finalPay.note = autoNote; emp.finalPay.autoNote = true; }
           if (!emp.endDate && p.end) emp.endDate = p.end;
           done.push(emp.id);
         });
@@ -1686,10 +1704,13 @@
         }
         return fpChanged();
       }
-      emp = fpEmp(el.dataset.fpEmp || el.dataset.fpLeave);
+      emp = fpEmp(el.dataset.fpEmp || el.dataset.fpLeave || el.dataset.fpNote);
       if (!emp || !emp.finalPay) return;
       cfg = emp.finalPay;
-      if (el.dataset.fpFlag) {
+      if (el.dataset.fpNote !== undefined) {
+        cfg.note = String(el.value).trim() || undefined;
+        delete cfg.autoNote;   // now someone's own
+      } else if (el.dataset.fpFlag) {
         if (el.checked) delete cfg[el.dataset.fpFlag]; else cfg[el.dataset.fpFlag] = false;
       } else if (el.dataset.fpLeave !== undefined) {
         cfg.leaveDays = String(el.value).trim() === '' ? null : parseAmount(el.value);

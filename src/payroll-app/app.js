@@ -1525,6 +1525,8 @@
     var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };
     var from = (state.year - 1) + '-12-01';
     var people = state.employees.filter(function (e) {
+      // Only people on this payroll (with a monthly rate), as on Payroll Run.
+      if (!(E.num(e.monthlyRate) > 0)) return false;
       return (isDate(e.endDate) && e.endDate >= from) || (e.finalPay && e.finalPay.periodId);
     }).sort(function (a, b) { return String(b.endDate).localeCompare(String(a.endDate)); });
     if (!people.length) {

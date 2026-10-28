@@ -133,10 +133,20 @@
       if (!adj || !/^\d{4}-\d{2}-\d{2}$/.test(eff)) return;
       if (eff > state.period.start) return;   // still straddling, or not yet in force
       var was = E.num(emp.monthlyRate);
+      /* Effective before this cutoff: the earlier cutoffs were paid at the
+         old rate, so the difference since the effective date is paid here. */
+      if (eff < state.period.start) {
+        var bp = E.backPayFor(emp, eff, was, E.r2(was + adj), state.period, state.settings);
+        if (bp.amount) {
+          emp.backPay = { periodId: state.period.id, amount: bp.amount, from: bp.from, to: bp.to,
+            oldRate: bp.oldRate, newRate: bp.newRate, rows: bp.rows };
+        }
+      }
       emp.monthlyRate = E.r2(was + adj);
       emp.salaryAdjustment = 0;
       emp.salaryAdjustmentEffective = null;
-      folded.push({ name: emp.lastName + ', ' + emp.firstName, from: was, to: emp.monthlyRate, eff: eff });
+      folded.push({ name: emp.lastName + ', ' + emp.firstName, from: was, to: emp.monthlyRate, eff: eff,
+        backPay: emp.backPay && emp.backPay.periodId === state.period.id ? emp.backPay.amount : 0 });
     });
     if (folded.length) persist();
     return folded;
@@ -273,7 +283,8 @@
       'adjustment was cleared — a later increase now adds on top of it.' +
       '<ul>' + f.map(function (x) {
         return '<li>' + esc(x.name) + ' — ' + plain(x.from) + ' → ' + plain(x.to) +
-          ' <span class="muted">effective ' + esc(x.eff) + '</span></li>';
+          ' <span class="muted">effective ' + esc(x.eff) + '</span>' +
+          (x.backPay ? ' · back pay <strong>' + plain(x.backPay) + '</strong> added to this cutoff' : '') + '</li>';
       }).join('') + '</ul></div>';
   }
 
@@ -384,7 +395,7 @@
    */
   function adjCell(s, emp) {
     var a = s.adjustment;
-    var amt = E.num(emp.salaryAdjustment);
+    var amt = E.num(emp.salaryAdjustment), rate = E.num(emp.monthlyRate);
     var eff = String(emp.salaryAdjustmentEffective || '');
     var dated = /^\d{4}-\d{2}-\d{2}$/.test(eff);
 
@@ -407,13 +418,21 @@
       cls = ' pending';
     }
 
+    if (amt) note = (note ? note + ' · ' : '') + (amt > 0 ? '+' : '') + plain(amt) + '/month';
+    // Back pay this cutoff carries (a change effective before it).
+    var bp = emp.backPay && emp.backPay.periodId === state.period.id ? emp.backPay : null;
+    var bpNote = bp ? '<div class="auto-note">back pay +' + plain(bp.amount) + ' (' + esc(E.fmtShort(E.parseYmd(bp.from))) +
+      ' \u2013 ' + esc(E.fmtShort(E.parseYmd(bp.to))) + ') <button class="link-btn" data-backpay-del="' + esc(emp.id) +
+      '" type="button" title="Take the back pay off this cutoff">remove</button></div>' : '';
+
     return '<td class="num adj' + cls + '">' +
       '<input type="text" inputmode="decimal" data-adj-emp="' + esc(emp.id) + '"' +
-        ' value="' + esc(amt ? plain(amt) : '') + '" placeholder="0.00"' +
-        ' title="Increase added to the monthly rate from its effectivity date. Use a negative for a decrease.">' +
+        ' value="' + esc(amt ? plain(E.r2(rate + amt)) : '') + '" placeholder="new rate"' +
+        ' title="The new monthly rate. With its effective date: inside this cutoff it is split by working days; ' +
+        'before this cutoff the back pay since that date is added here; later, it waits.">' +
       '<input type="date" data-adjeff-emp="' + esc(emp.id) + '"' +
         ' value="' + esc(dated ? eff : '') + '" title="Effective date — the adjustment applies from here onward.">' +
-      (note ? '<div class="muted" style="font-size:11px">' + note + '</div>' : '') +
+      (note ? '<div class="muted" style="font-size:11px">' + note + '</div>' : '') + bpNote +
       '</td>';
   }
 
@@ -595,7 +614,9 @@
       var who = state.employees.filter(function (e) { return e.id === id; })[0];
       if (!who) return;
       if (el.dataset.adjEmp !== undefined) {
-        who.salaryAdjustment = parseSigned(el.value);
+        // Typed as the new monthly rate; kept as the difference from the current one.
+        var typedRate = String(el.value).trim() === '' ? null : parseAmount(el.value);
+        who.salaryAdjustment = typedRate === null ? 0 : E.r2(typedRate - E.num(who.monthlyRate));
       } else {
         var v = String(el.value).trim();
         who.salaryAdjustmentEffective = /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
@@ -3374,6 +3395,16 @@
     $('#psPreviewBatch').addEventListener('change', psLoadPreviewPeople);
     $('#psEmployee').addEventListener('change', psPreview);
     wireFinalPay();
+    $('#runBody').addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-backpay-del]');
+      if (!b) return;
+      var who = state.employees.filter(function (e) { return e.id === b.dataset.backpayDel; })[0];
+      if (!who || !who.backPay) return;
+      if (!confirm('Take the back pay of ' + plain(who.backPay.amount) + ' off this cutoff?')) return;
+      delete who.backPay;
+      persist();
+      renderRun();
+    });
     $('#upFile').addEventListener('change', upRead);
     $('#wiseFile').addEventListener('change', wiseLoad);
     ['#upCompany', '#upCompanyOther', '#upAddress', '#upCurrency'].forEach(function (id) { $(id).addEventListener('change', upRead); });

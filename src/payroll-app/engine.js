@@ -522,6 +522,14 @@
     /* Final pay (finalPayFor): unused leave is paid as an allowance, kept out
        of this cutoff's withholding — the annual tax adjustment taxes what is
        taxable of it — and the loan balance and clearance items come off. */
+    /* Back pay of a salary change effective before this cutoff (backPayFor),
+       labelled as a salary adjustment so the 13th month counts it. */
+    var bp = emp.backPay;
+    if (bp && bp.periodId === period.id && num(bp.amount)) {
+      items.taxableAllowances.push({ label: 'Salary adjustment \u2014 back pay (' + fmtShort(parseYmd(bp.from)) +
+        ' \u2013 ' + fmtShort(parseYmd(bp.to)) + ')', amount: r2(num(bp.amount)) });
+      items.totalTaxableAllowance = r2(items.totalTaxableAllowance + num(bp.amount));
+    }
     var fp = extra.finalPay;
     if (fp) {
       if (fp.leaveAmount) {
@@ -1143,6 +1151,44 @@
     };
   }
 
+  /**
+   * Back pay of a salary change effective before `period`: for every
+   * earlier cutoff from the effective date on, half the monthly difference
+   * times the share of its working days on or after that date (and on
+   * staff) — the same working-day split a change inside a cutoff gets.
+   * Paid in `period` as a taxable salary adjustment, so it counts toward
+   * the 13th month.
+   */
+  function backPayFor(emp, effective, oldRate, newRate, period, settings) {
+    var diff = r2(num(newRate) - num(oldRate)), rows = [], total = 0;
+    var wd = settings.schedule.workDays;
+    var y = parseInt(effective.slice(0, 4), 10), py = parseInt(period.start.slice(0, 4), 10);
+    var cutoffs = [];
+    for (var yy = y - 1; yy <= py; yy++) cutoffs = cutoffs.concat(buildPeriods(yy));
+    var seen = {};
+    cutoffs.forEach(function (p) {
+      if (seen[p.id] || p.end < effective || p.start >= period.start) return;
+      seen[p.id] = true;
+      var st = staffDays(emp, p, settings), from = effective > p.start ? effective : p.start;
+      var d = parseYmd(p.start), end = parseYmd(p.end), all = 0, owed = 0;
+      var hired = String(emp.dateHired || ''), left = String(emp.endDate || '');
+      while (d <= end) {
+        if (wd.indexOf(d.getDay()) !== -1) {
+          all++;
+          var k = ymd(d);
+          if (k >= from && !(hired && k < hired) && !(left && k > left)) owed++;
+        }
+        d.setDate(d.getDate() + 1);
+      }
+      if (!all || !owed || !st.onStaff) return;
+      var amount = r2(diff / 2 * owed / all);
+      rows.push({ periodId: p.id, days: owed, of: all, amount: amount });
+      total += amount;
+    });
+    var last = new Date(parseYmd(period.start).getTime() - 86400000);
+    return { amount: r2(total), rows: rows, from: effective, to: ymd(last), oldRate: r2(num(oldRate)), newRate: r2(num(newRate)) };
+  }
+
   /** A cutoff by its id ("2026-11-P10"), from the year it names or either side. */
   function periodById(id) {
     var y = parseInt(String(id).slice(0, 4), 10), hit = null;
@@ -1284,6 +1330,7 @@
   }
 
   global.PayrollEngine = {
+    backPayFor: backPayFor,
     finalPayFor: finalPayFor,
     periodById: periodById,
     r2: r2,

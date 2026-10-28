@@ -40,6 +40,7 @@ export async function GET(request: Request) {
           email: emp?.email ?? "",
           net_pay: Number(r.net_pay),
           currency: (r.lines as { currency?: string } | null)?.currency || "PHP",
+          code: (r.lines as { employee?: { code?: string } } | null)?.employee?.code ?? "",
         };
       }),
     });

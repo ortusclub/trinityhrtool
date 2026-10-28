@@ -18,6 +18,13 @@
       branch: 'Philippines'      // shown on the payslip
     },
 
+    // Wise bulk payments for Non-Trinity payslips: the currency paid from,
+    // and each person's Wise recipient, remembered from a Wise CSV by email.
+    wise: {
+      sourceCurrency: 'USD',
+      recipients: {}             // email → { id, name, detail, type }
+    },
+
     // Work schedule: Mon-Fri, 10:00AM - 7:00PM (1 hour unpaid meal break)
     schedule: {
       shiftStart: '10:00',

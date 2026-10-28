@@ -2412,6 +2412,7 @@
   function trinityBatch(per) { return per.id; }
 
   function renderPayslipTab() {
+    wiseShowSummary();
     $('#psYear').textContent = state.year;
     $('#psPeriod').innerHTML = state.periods.map(function (p) {
       return '<option value="' + p.id + '">' + esc(window.PayrollTemplate.cutoffTitle(p)) +
@@ -2513,6 +2514,7 @@
               (b.published_at ? '<span class="pill rf">Published</span>' : '<span class="pill spc">Draft</span>') +
               '</td><td style="white-space:nowrap">' +
               '<button class="btn ghost tiny" data-bview="' + i + '" type="button">Preview</button> ' +
+              (b.kind === 'notax' || b.kind === 'xk' ? '<button class="btn ghost tiny" data-bwise="' + i + '" type="button">Wise CSV</button> ' : '') +
               (b.published_at
                 ? '<button class="btn ghost tiny" data-bunpub="' + i + '" type="button">Unpublish</button> '
                 : '<button class="btn tiny" data-bpub="' + i + '" type="button"' + (b.count ? '' : ' disabled') + '>Publish</button> ') +
@@ -2560,6 +2562,8 @@
       b = ps.batches[+t.dataset.bview];
       $('#psPreviewBatch').value = b.id;
       psLoadPreviewPeople().then(function () { $('#psPreview').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+    } else if (t.dataset.bwise !== undefined) {
+      wiseExport(ps.batches[+t.dataset.bwise]);
     } else if (t.dataset.bpub !== undefined) {
       b = ps.batches[+t.dataset.bpub];
       psRelease(b.id, KIND_NAME[b.kind] + ' · ' + b.label, b.count, true);
@@ -2574,6 +2578,88 @@
         .then(function () { return Promise.all([psLoadStatus(), psLoadBatches()]); },
           function (err) { alert('Could not delete.\n\n' + err.message); });
     }
+  }
+
+  /* ---- Wise bulk payments for Non-Trinity batches ----
+     Wise's bulk CSV pays existing recipients by ID, which TrinityHR doesn't
+     have, so they're remembered from a Wise CSV already used (by email, in
+     the shared settings). One file per currency other than PHP; anyone with
+     no remembered recipient still gets a row, listed to fill in. */
+  var WISE_HEAD = ['recipientId', 'name', 'recipientEmail', 'recipientDetail', 'sourceCurrency', 'targetCurrency',
+    'amountCurrency', 'amount', 'paymentReference', 'referenceNumber', 'receiverType'];
+  function wiseKey(v) {
+    return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+  }
+  function wiseRecipients() { return state.settings.wise.recipients || {}; }
+  function wiseShowSummary() {
+    var n = Object.keys(wiseRecipients()).length;
+    $('#wiseSummary').textContent = n ? n + ' Wise recipient(s) remembered.' : 'No Wise recipients remembered yet.';
+  }
+  function wiseLoad() {
+    var f = $('#wiseFile').files[0];
+    if (!f) return;
+    window.XlsxWriter.read(f).then(function (sheets) {
+      var rows = sheets[Object.keys(sheets)[0]] || [];
+      var head = (rows[0] || []).map(function (h) { return String(h || '').trim(); });
+      var col = function (r, name) { var i = head.indexOf(name); return i === -1 ? '' : String(r[i] === null || r[i] === undefined ? '' : r[i]).trim(); };
+      if (head.indexOf('recipientId') === -1 || head.indexOf('recipientEmail') === -1) {
+        throw new Error('Not a Wise bulk CSV: it needs recipientId and recipientEmail columns.');
+      }
+      var found = {};
+      rows.slice(1).forEach(function (r) {
+        var email = col(r, 'recipientEmail').toLowerCase(), id = col(r, 'recipientId');
+        if (!email || !id) return;
+        // Someone with two recipients: keep the one their salary went to.
+        var salary = /^[A-Z]+\d+ - Salary$/i.test(col(r, 'paymentReference'));
+        if (found[email] && !(salary && !found[email].salary)) return;
+        found[email] = { id: id, name: col(r, 'name'), detail: col(r, 'recipientDetail'),
+          type: col(r, 'receiverType') || 'PERSON', salary: salary };
+      });
+      var emails = Object.keys(found);
+      if (!emails.length) throw new Error('No rows with both a recipientId and a recipientEmail.');
+      var all = wiseRecipients();
+      emails.forEach(function (e) { delete found[e].salary; all[e] = found[e]; });
+      state.settings.wise.recipients = all;
+      Store.saveSettings(state.settings);
+      wiseShowSummary();
+      $('#wiseSummary').textContent += ' Loaded ' + emails.length + ' from ' + f.name + '.';
+    }).catch(function (err) {
+      $('#wiseSummary').textContent = err.message;
+    }).then(function () { $('#wiseFile').value = ''; });
+  }
+  function wiseExport(b) {
+    psApi('payslips?batch=' + encodeURIComponent(b.id)).then(function (d) {
+      var rec = wiseRecipients(), byName = {};
+      Object.keys(rec).forEach(function (e) { byName[wiseKey(rec[e].name)] = e; });
+      var source = String(state.settings.wise.sourceCurrency || 'USD').trim().toUpperCase();
+      var files = {}, missing = [], php = 0;
+      d.payslips.slice().sort(function (x, y) { return x.name.localeCompare(y.name); }).forEach(function (p) {
+        if (p.currency === 'PHP') { php++; return; }
+        var r = rec[(p.email || '').toLowerCase()] || rec[byName[wiseKey(p.name)]];
+        if (!r) missing.push(p.name + ' (' + p.currency + ')');
+        (files[p.currency] = files[p.currency] || []).push([
+          r ? r.id : '', r ? r.name : p.name, p.email || '', r ? r.detail : '', source, p.currency,
+          'target', String(E.r2(p.net_pay)), (p.code ? p.code + ' - ' : '') + 'Salary', '', r ? r.type : 'PERSON'
+        ]);
+      });
+      var curs = Object.keys(files).sort();
+      if (!curs.length) { alert('This batch has no payslips outside PHP.'); return; }
+      curs.forEach(function (cur, i) {
+        var csv = [WISE_HEAD].concat(files[cur]).map(function (r) {
+          return r.map(function (v) { return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(',');
+        }).join('\n');
+        // A moment apart, or the browser keeps only the first download.
+        setTimeout(function () {
+          window.XlsxWriter.download(new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
+            'Bulk Uploads - ' + b.label + ' ' + cur + '.csv');
+        }, i * 600);
+      });
+      var msg = [curs.map(function (c) { return files[c].length + ' in ' + c; }).join(', ') + ' \u2014 one Wise CSV per currency.'];
+      if (php) msg.push(php + ' PHP payslip(s) left out (pay those through BPI).');
+      if (missing.length) msg.push('\nNo Wise recipient remembered for these, so their recipientId is blank \u2014 fill it in, ' +
+        'or load a Wise CSV that has them (' + missing.length + '):\n  ' + missing.join('\n  '));
+      alert(msg.join('\n'));
+    }, function (err) { alert('Could not read the batch.\n\n' + err.message); });
   }
 
   /* ---- Non-Trinity uploads (Payslip Generator CSV, or the templates below) ---- */
@@ -2917,6 +3003,7 @@
     $('#psPreviewBatch').addEventListener('change', psLoadPreviewPeople);
     $('#psEmployee').addEventListener('change', psPreview);
     $('#upFile').addEventListener('change', upRead);
+    $('#wiseFile').addEventListener('change', wiseLoad);
     ['#upCompany', '#upAddress', '#upCurrency'].forEach(function (id) { $(id).addEventListener('change', upRead); });
     $('#upSave').addEventListener('click', upSave);
     $('#upTplNoTax').addEventListener('click', function () { downloadPayslipTemplate('notax'); });

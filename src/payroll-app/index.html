@@ -493,6 +493,22 @@
 
     <div class="card">
       <div class="card-head">
+        <h2>Wise bulk payments</h2>
+        <p class="hint" style="display:block">
+          Each Non-Trinity batch below has <strong>Wise CSV</strong>: one Wise bulk-upload file per currency
+          other than PHP, with each person's net pay. Wise needs each person's recipient ID, so load a
+          Wise bulk CSV you've used before; recipients are remembered by email (loading another adds to them).
+        </p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 8px">
+        <label>Past Wise bulk CSV <input type="file" id="wiseFile" accept=".csv,text/csv"></label>
+        <label>Pay from (source currency) <input type="text" data-setting="wise.sourceCurrency" maxlength="3" style="text-transform:uppercase"></label>
+      </div>
+      <div id="wiseSummary" class="muted" style="padding:0 20px 18px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
         <h2>All payslip batches</h2>
         <p class="hint" style="display:block">Everything prepared or uploaded, newest payout first.</p>
       </div>

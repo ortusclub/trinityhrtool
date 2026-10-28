@@ -495,7 +495,58 @@
     });
   }
 
+  /* The "Final Pay <name>" tabs beside a payroll register: one leaver's
+     year, cutoff by cutoff, then a "Final Pay" row — what their final pay
+     cutoff paid. The cutoff is the file's (its name or register title). */
+  function finalPayDate(v) {
+    var t = String(X.toYmd(v) || '').trim(), m;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) return ymd(+m[3], +m[1], +m[2]);
+    if ((m = t.match(/^([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s*(\d{4})$/)) && monthOf(m[1])) return ymd(+m[3], monthOf(m[1]), +m[2]);
+    return '';
+  }
+  function parseFinalPay(file) {
+    return X.read(file).then(function (sheets) {
+      var names = Object.keys(sheets);
+      var register = names.filter(function (n) { return /payroll\s*register/i.test(n); })[0];
+      var title = register ? (sheets[register] || []).slice(0, 4).map(function (r) {
+        return (r || []).filter(function (x) { return x !== null && x !== undefined; }).join(' ');
+      }).join(' ') : '';
+      var cutoff = readCutoff(file && file.name) || readCutoff(title);
+      var people = [], problems = [];
+      names.filter(function (n) { return /final\s*pay/i.test(n); }).forEach(function (name) {
+        var grid = sheets[name] || [];
+        var hr = -1;
+        for (var r = 0; r < Math.min(grid.length, 15); r++) {
+          if ((grid[r] || []).some(function (c) { return normHead(c) === 'EMPLOYEE ID'; })) { hr = r; break; }
+        }
+        var row = grid.filter(function (r) { return r && /^final pay$/i.test(String(r[0] || '').trim()); })[0];
+        if (hr < 0 || !row) { problems.push(name + ': no "Final Pay" row'); return; }
+        var head = grid[hr].map(normHead), end = '';
+        grid.slice(0, hr).forEach(function (r) {
+          (r || []).forEach(function (c, i) { if (/^end date$/i.test(String(c || '').trim())) end = finalPayDate(r[i + 1]); });
+        });
+        var sum = function (re) {
+          var t = 0;
+          head.forEach(function (h, i) { if (re.test(h)) { var n = numberOf(row[i]); if (n && !isNaN(n)) t += n; } });
+          return Math.round(t * 100) / 100;
+        };
+        people.push({
+          sheet: name,
+          id: String(row[head.indexOf('EMPLOYEE ID')] || '').trim(),
+          name: String(row[head.indexOf('EMPLOYEE NAME')] || '').trim(),
+          end: end,
+          thirteenth: sum(/^13TH MONTH PAY( TAXABLE)?$/),
+          taxRefund: sum(/^TAX REFUND$/),
+          net: sum(/^NET PAY$/)
+        });
+      });
+      return { cutoff: cutoff, people: people, problems: problems };
+    });
+  }
+
   global.PayrollTemplate = {
+    parseFinalPay: parseFinalPay,
     build: buildWorkbook,
     parse: parseWorkbook,
     readCutoff: readCutoff,

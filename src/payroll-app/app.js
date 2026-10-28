@@ -1525,7 +1525,9 @@
     var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };
     var from = (state.year - 1) + '-12-01';
     var people = state.employees.filter(function (e) {
-      // Only people on this payroll (with a monthly rate), as on Payroll Run.
+      // Only people on this payroll (with a monthly rate), as on Payroll Run,
+      // and anyone whose final pay is on record.
+      if (e.finalPay && e.finalPay.recorded) return true;
       if (!(E.num(e.monthlyRate) > 0)) return false;
       return (isDate(e.endDate) && e.endDate >= from) || (e.finalPay && e.finalPay.periodId);
     }).sort(function (a, b) { return String(b.endDate).localeCompare(String(a.endDate)); });
@@ -1554,6 +1556,7 @@
       var head = '<td class="sticky-col"><strong>' + esc(emp.lastName + ', ' + emp.firstName) + '</strong>' +
         '<div class="muted" style="font-size:11.5px">' + id + '</div></td>' +
         '<td>' + esc(emp.endDate || '\u2014') + '</td><td>' + sel + '</td>';
+      if (cfg.recorded) return '<tr>' + head + fpRecordedCells(emp, cfg) + '</tr>';
       var fp = cfg.periodId ? E.finalPayFor(emp, state.dtr, state.settings) : null;
       if (!fp) return '<tr>' + head + '<td colspan="6" class="muted">Choose the cutoff to work out their final pay.</td></tr>';
 
@@ -1595,6 +1598,62 @@
     }).join('');
   }
 
+  /* Final pay already paid, recorded from a payroll file: the figures that
+     cutoff's register paid (its imported payslip), else the Final Pay tab's. */
+  function fpRecordedCells(emp, cfg) {
+    var rec = cfg.recorded, d = state.dtr[cfg.periodId + '|' + emp.id], period = E.periodById(cfg.periodId);
+    var thirteenth = rec.thirteenth, refund = rec.taxRefund, net = rec.net;
+    if (d && d.posted && period) {
+      var slip = E.computePayslip(emp, period, d, state.settings, null);
+      thirteenth = slip.earnings.thirteenthMonth; refund = slip.postTax.taxRefund; net = slip.totals.netPay;
+    }
+    return '<td class="num">' + plain(thirteenth) + '</td><td class="num muted">\u2014</td>' +
+      '<td class="num">' + plain(refund) + '</td><td class="num muted">\u2014</td><td class="num muted">\u2014</td>' +
+      '<td class="num strong">' + plain(net) + '<div class="auto-note"><span class="pill rf">Paid</span> ' +
+      esc(rec.source || 'payroll file') + '</div></td>';
+  }
+
+  /* Record the final pay in past payroll files' "Final Pay" tabs: the
+     person's final pay is marked paid in that file's cutoff (and their last
+     day filled in if missing). Payroll already imported is left as it is. */
+  function recordFinalPayFiles(files) {
+    var T = window.PayrollTemplate, done = [], missing = [], problems = [], seen = {};
+    Promise.all(Array.prototype.map.call(files, function (f) {
+      return T.parseFinalPay(f).then(function (r) { return { file: f, r: r }; },
+        function (err) { problems.push(f.name + ': ' + err.message); return null; });
+    })).then(function (all) {
+      all.filter(Boolean).forEach(function (x) {
+        var period = x.r.cutoff && x.r.cutoff.start ? periodStarting(x.r.cutoff.start) : null;
+        x.r.problems.forEach(function (p) { problems.push(x.file.name + ' \u2014 ' + p); });
+        if (!period) { if (x.r.people.length) problems.push(x.file.name + ': could not tell the cutoff from its name'); return; }
+        x.r.people.forEach(function (p) {
+          var key = function (v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]+/g, ' ').trim(); };
+          var emp = state.employees.filter(function (e) { return p.id && String(e.id).trim() === p.id; })[0] ||
+            state.employees.filter(function (e) { return key(e.firstName + ' ' + e.lastName) === key(p.name); })[0];
+          if (!emp) { missing.push(p.name + ' (' + (p.id || 'no ID') + ', ' + x.file.name + ')'); return; }
+          // A person in two files: the one that paid the 13th month or a refund is the final pay.
+          var weight = Math.abs(p.thirteenth) + Math.abs(p.taxRefund);
+          if (seen[emp.id] && seen[emp.id].weight >= weight) {
+            problems.push(p.name + ': also in ' + x.file.name + ' \u2014 kept ' + seen[emp.id].file);
+            return;
+          }
+          if (seen[emp.id]) problems.push(p.name + ': also in ' + seen[emp.id].file + ' \u2014 kept ' + x.file.name);
+          seen[emp.id] = { weight: weight, file: x.file.name };
+          emp.finalPay = { periodId: period.id, recorded: {
+            thirteenth: p.thirteenth, taxRefund: p.taxRefund, net: p.net,
+            source: x.file.name.replace(/\.xlsx?$/i, '') + ' \u00b7 ' + p.sheet } };
+          if (!emp.endDate && p.end) emp.endDate = p.end;
+          done.push(emp.id);
+        });
+      });
+      var n = Object.keys(seen).length;
+      if (n) fpChanged();
+      alert('Recorded the final pay of ' + n + ' people.' +
+        (missing.length ? '\n\nNot on the roster, so not recorded (' + missing.length + '):\n  ' + missing.join('\n  ') : '') +
+        (problems.length ? '\n\nTo check:\n  ' + problems.join('\n  ') : ''));
+    });
+  }
+
   function fpChanged() {
     Store.saveEmployees(state.employees);
     renderFinalPay();
@@ -1602,13 +1661,22 @@
   }
   function fpEmp(id) { return state.employees.filter(function (e) { return e.id === id; })[0]; }
   function wireFinalPay() {
+    $('#btnFpRecord').addEventListener('click', function () { $('#fpFiles').click(); });
+    $('#fpFiles').addEventListener('change', function () {
+      if (this.files.length) recordFinalPayFiles(this.files);
+      this.value = '';
+    });
     var body = $('#fpBody');
     body.addEventListener('change', function (ev) {
       var el = ev.target, emp, cfg;
       if (el.dataset.fpPeriod !== undefined) {
         emp = fpEmp(el.dataset.fpPeriod);
         if (!el.value) delete emp.finalPay;
-        else { emp.finalPay = emp.finalPay || {}; emp.finalPay.periodId = el.value; }
+        else {
+          emp.finalPay = emp.finalPay || {};
+          if (emp.finalPay.periodId !== el.value) delete emp.finalPay.recorded;   // a new cutoff is worked out afresh
+          emp.finalPay.periodId = el.value;
+        }
         return fpChanged();
       }
       emp = fpEmp(el.dataset.fpEmp || el.dataset.fpLeave);

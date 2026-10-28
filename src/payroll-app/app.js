@@ -2584,7 +2584,8 @@
      Wise's bulk CSV pays existing recipients by ID, which TrinityHR doesn't
      have, so they're remembered from a Wise CSV already used (by email, in
      the shared settings). One file per currency other than PHP; anyone with
-     no remembered recipient still gets a row, listed to fill in. */
+     no remembered recipient still gets a row, listed to fill in. The
+     reference is initials + the payroll's MMYYYY, as in past Wise files. */
   var WISE_HEAD = ['recipientId', 'name', 'recipientEmail', 'recipientDetail', 'sourceCurrency', 'targetCurrency',
     'amountCurrency', 'amount', 'paymentReference', 'referenceNumber', 'receiverType'];
   function wiseKey(v) {
@@ -2612,8 +2613,10 @@
         // Someone with two recipients: keep the one their salary went to.
         var salary = /^[A-Z]+\d+ - Salary$/i.test(col(r, 'paymentReference'));
         if (found[email] && !(salary && !found[email].salary)) return;
+        // "AG102026 - Salary" → AG, the letters their payment references start with
+        var initials = (col(r, 'paymentReference').match(/^([A-Z]+)\d+ - Salary$/i) || [])[1] || '';
         found[email] = { id: id, name: col(r, 'name'), detail: col(r, 'recipientDetail'),
-          type: col(r, 'receiverType') || 'PERSON', salary: salary };
+          type: col(r, 'receiverType') || 'PERSON', initials: initials.toUpperCase(), salary: salary };
       });
       var emails = Object.keys(found);
       if (!emails.length) throw new Error('No rows with both a recipientId and a recipientEmail.');
@@ -2632,6 +2635,13 @@
       var rec = wiseRecipients(), byName = {};
       Object.keys(rec).forEach(function (e) { byName[wiseKey(rec[e].name)] = e; });
       var source = String(state.settings.wise.sourceCurrency || 'USD').trim().toUpperCase();
+      // Reference: initials + the payroll's month and year, "AG102026 - Salary".
+      var lm = String(b.label).match(/^([A-Za-z]+) (\d{4})$/), mi = lm ? MONTHS.indexOf(lm[1]) : -1;
+      var when = mi >= 0 ? ('0' + (mi + 1)).slice(-2) + lm[2] : b.payout_date.slice(5, 7) + b.payout_date.slice(0, 4);
+      var initials = function (p, r) {
+        return (r && r.initials) || (String(p.code).match(/^[A-Za-z]+/) || [''])[0].toUpperCase() ||
+          wiseKey(p.name).split(' ').map(function (w) { return w.charAt(0); }).join('').toUpperCase();
+      };
       var files = {}, missing = [], php = 0;
       d.payslips.slice().sort(function (x, y) { return x.name.localeCompare(y.name); }).forEach(function (p) {
         if (p.currency === 'PHP') { php++; return; }
@@ -2639,7 +2649,7 @@
         if (!r) missing.push(p.name + ' (' + p.currency + ')');
         (files[p.currency] = files[p.currency] || []).push([
           r ? r.id : '', r ? r.name : p.name, p.email || '', r ? r.detail : '', source, p.currency,
-          'target', String(E.r2(p.net_pay)), (p.code ? p.code + ' - ' : '') + 'Salary', '', r ? r.type : 'PERSON'
+          'target', String(E.r2(p.net_pay)), initials(p, r) + when + ' - Salary', '', r ? r.type : 'PERSON'
         ]);
       });
       var curs = Object.keys(files).sort();

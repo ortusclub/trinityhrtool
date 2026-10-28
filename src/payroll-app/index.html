@@ -21,6 +21,7 @@
 
 <nav class="tabs" id="tabs">
   <button class="tab active" data-tab="run" type="button">Payroll Run</button>
+  <button class="tab" data-tab="finalpay" type="button">Final Pay</button>
   <button class="tab" data-tab="employees" type="button">Employees</button>
   <button class="tab" data-tab="holidays" type="button">Holidays</button>
   <button class="tab" data-tab="yearend" type="button">13th Month &amp; Year-End</button>
@@ -45,7 +46,6 @@
       <div class="period-meta" id="periodMeta"></div>
       <div class="period-actions">
         <button class="btn ghost" id="btnClearDtr" type="button">Clear timesheet</button>
-        <button class="btn ghost danger" id="btnDeleteCutoffs" type="button">Delete all cutoffs</button>
         <button class="btn ghost" id="btnExportCsv" type="button">Export CSV</button>
         <button class="btn ghost" id="btnExportBpi" type="button">BPI bank file (.xls)</button>
         <button class="btn ghost" id="btnSendTrinity" type="button" style="display:none">Send to TrinityHR</button>
@@ -206,6 +206,33 @@
   </section>
 
   <!-- ==================== EMPLOYEES ==================== -->
+  <!-- ==================== FINAL PAY ==================== -->
+  <section class="panel hidden" id="tab-finalpay">
+    <div class="card">
+      <div class="card-head">
+        <h2>Final pay</h2>
+        <p class="hint" style="display:block">
+          Everyone with a last day of work (set it on the Employees tab). Choose the cutoff their final
+          pay goes in, and that cutoff adds it to their pay: the 13th month not yet paid, unused leave at
+          their daily rate (tax-free up to the days set under Settings &amp; Rules), the year's tax
+          adjustment (a refund, or tax still due), what is left of any loan, and clearance deductions you
+          add here. Each shows as its own line on the payslip and goes into the template and the BPI file.
+          Untick a part to leave it out.
+        </p>
+      </div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact" id="fpTable">
+          <thead><tr>
+            <th>Employee</th><th>Last day</th><th>Final pay in</th>
+            <th class="num">13th month</th><th class="num">Unused leave</th><th class="num">Tax adjustment</th>
+            <th class="num">Loan balance</th><th class="num">Clearance</th><th class="num">Net pay that cutoff</th>
+          </tr></thead>
+          <tbody id="fpBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section class="panel hidden" id="tab-employees">
     <div class="card">
       <div class="card-head row">
@@ -572,6 +599,7 @@
         <label>Address <input type="text" data-setting="company.address"></label>
         <label>TIN <input type="text" data-setting="company.tin"></label>
         <label>Branch <input type="text" data-setting="company.branch"></label>
+        <label>Final pay: unused leave tax-free up to (days) <input type="number" step="1" data-setting="finalPay.leaveExemptDays"></label>
         <label>BPI funding account <input type="text" inputmode="numeric" data-text data-setting="company.bpiFundingAccount"
           placeholder="Account the payroll is paid from"></label>
       </div>

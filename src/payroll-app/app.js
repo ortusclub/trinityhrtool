@@ -152,7 +152,9 @@
     state.runEmployees = state.employees.filter(function (e) {
       var d = state.dtr[state.period.id + '|' + e.id];
       if (d && d.posted) return true;
-      return !postedHere && onStaff(e, state.period) && E.num(e.monthlyRate) > 0;
+      // Final pay can land in a cutoff after the last day; they're on it then.
+      var finalHere = e.finalPay && e.finalPay.periodId === state.period.id;
+      return !postedHere && (onStaff(e, state.period) || finalHere) && E.num(e.monthlyRate) > 0;
     });
     state.run = E.computeRun(state.runEmployees, state.period, state.dtr, state.settings);
     renderPeriodMeta();
@@ -622,29 +624,6 @@
 
     Store.saveDtr(state.dtr);
     renderRun();
-  }
-
-  /* Every cutoff of every year: typed timesheets and imported payroll
-     figures alike. The roster, rates, holidays and settings stay. */
-  function deleteAllCutoffs() {
-    var keys = Object.keys(state.dtr);
-    var periods = {}, posted = {};
-    keys.forEach(function (k) {
-      var pid = k.split('|')[0];
-      periods[pid] = true;
-      if (state.dtr[k] && state.dtr[k].posted) posted[pid] = true;
-    });
-    var n = Object.keys(periods).length;
-    if (!n) { alert('There are no cutoffs to delete.'); return; }
-    if (!confirm('Delete all ' + n + ' cutoff' + (n === 1 ? '' : 's') + '?\n\n' +
-        Object.keys(posted).length + ' of them came from imported payroll files. Every cutoff\'s ' +
-        'timesheet entries and imported figures are removed; employees, rates, holidays and ' +
-        'settings are kept.\n\nThis cannot be undone — importing the payroll files again brings ' +
-        'the imported ones back.')) return;
-    state.dtr = {};
-    Store.saveDtr(state.dtr);
-    renderRun();
-    if (!$('#tab-yearend').classList.contains('hidden')) renderYearEnd();
   }
 
   function clearDtr() {
@@ -1273,7 +1252,9 @@
       list.push({ label: label, amount: amount, cls: cls || '' });
     };
 
-    add(earn, 'Basic Pay', slip.rates.semiMonthly);
+    // A cutoff after the last day carries only final pay: no basic to show, nor its proration.
+    var allOff = e.prorationDeduction && E.r2(e.prorationDeduction - slip.rates.semiMonthly) === 0;
+    if (!allOff) add(earn, 'Basic Pay', slip.rates.semiMonthly);
     if (slip.dtr.ptoDays) {
       add(earn, 'includes ' + slip.dtr.ptoDays + ' day/s paid time off', 0, 'sub');
     }
@@ -1290,7 +1271,7 @@
         if (t.trim()) add(earn, t.trim(), null, 'sub');
       });
     }
-    if (e.thirteenthMonth) add(earn, '13th Month Pay', e.thirteenthMonth);
+    if (e.thirteenthMonth) add(earn, slip.finalPay ? '13th Month Pay (pro rata, final pay)' : '13th Month Pay', e.thirteenthMonth);
     if (e.deMinimis) add(earn, 'De Minimis', e.deMinimis);
     if (slip.posted && e.holidayPay) add(earn, 'Holiday / Rest Day Pay', e.holidayPay);
     if (e.postedGrossAdjustment) add(earn, 'Adjustment (per payroll file)', e.postedGrossAdjustment);
@@ -1315,7 +1296,7 @@
     add(ded, 'Days Absent Deduction', e.absenceDeduction);
     if (e.lateDeduction) add(ded, 'Late Deduction — ' + slip.dtr.lateMinutes + ' min', e.lateDeduction);
     if (e.undertimeDeduction) add(ded, 'Undertime Deduction — ' + slip.dtr.undertimeMinutes + ' min', e.undertimeDeduction);
-    if (e.prorationDeduction) add(ded, 'Basic Adjustment (start / last day)', e.prorationDeduction);
+    if (e.prorationDeduction && !allOff) add(ded, 'Basic Adjustment (start / last day)', e.prorationDeduction);
     add(ded, 'SSS EE Contribution', sssApplied);
     add(ded, 'PhilHealth EE Contribution', phic);
     add(ded, 'HDMF EE Contribution', hdmf);
@@ -1528,6 +1509,131 @@
     });
   }
   function renderAll() { renderRun(); renderEmployees(); }
+
+  /* =====================================================================
+     FINAL PAY — the leaver's last pay, set up per person (emp.finalPay:
+     periodId, parts switched off as false, leaveDays typed, clearance
+     [{label, amount}]). The engine's finalPayFor works it out; computeRun
+     adds it to that cutoff.
+     ===================================================================== */
+  function fpCutoffs(emp) {
+    // The cutoff holding the last day, and the few after it.
+    var end = emp.endDate, y = parseInt(end.slice(0, 4), 10);
+    return E.buildPeriods(y).concat(E.buildPeriods(y + 1)).filter(function (p) { return p.end >= end; }).slice(0, 4);
+  }
+  function renderFinalPay() {
+    var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };
+    var from = (state.year - 1) + '-12-01';
+    var people = state.employees.filter(function (e) {
+      return (isDate(e.endDate) && e.endDate >= from) || (e.finalPay && e.finalPay.periodId);
+    }).sort(function (a, b) { return String(b.endDate).localeCompare(String(a.endDate)); });
+    if (!people.length) {
+      $('#fpBody').innerHTML = '<tr><td colspan="9" class="muted" style="padding:18px">Nobody has a last day of work set. ' +
+        'Set it on the Employees tab, and they show here.</td></tr>';
+      return;
+    }
+    var box = function (emp, key) {
+      var cfg = emp.finalPay || {};
+      return '<input type="checkbox" data-fp-flag="' + key + '" data-fp-emp="' + esc(emp.id) + '"' +
+        (cfg[key] === false ? '' : ' checked') + ' title="Include in the final pay"> ';
+    };
+    $('#fpBody').innerHTML = people.map(function (emp) {
+      var cfg = emp.finalPay || {}, id = esc(emp.id);
+      var cutoffs = isDate(emp.endDate) ? fpCutoffs(emp) : [];
+      if (cfg.periodId && !cutoffs.some(function (p) { return p.id === cfg.periodId; })) {
+        var cur = E.periodById(cfg.periodId);
+        if (cur) cutoffs.unshift(cur);
+      }
+      var sel = '<select data-fp-period="' + id + '"><option value="">\u2014 not set up \u2014</option>' +
+        cutoffs.map(function (p) {
+          return '<option value="' + esc(p.id) + '"' + (p.id === cfg.periodId ? ' selected' : '') + '>' +
+            esc(window.PayrollTemplate.cutoffTitle(p)) + ' (paid ' + esc(E.fmtShort(E.parseYmd(p.payoutDate))) + ')</option>';
+        }).join('') + '</select>';
+      var head = '<td class="sticky-col"><strong>' + esc(emp.lastName + ', ' + emp.firstName) + '</strong>' +
+        '<div class="muted" style="font-size:11.5px">' + id + '</div></td>' +
+        '<td>' + esc(emp.endDate || '\u2014') + '</td><td>' + sel + '</td>';
+      var fp = cfg.periodId ? E.finalPayFor(emp, state.dtr, state.settings) : null;
+      if (!fp) return '<tr>' + head + '<td colspan="6" class="muted">Choose the cutoff to work out their final pay.</td></tr>';
+
+      var d = state.dtr[fp.period.id + '|' + emp.id];
+      var posted = E.isPostedPeriod(state.dtr, fp.period.id);
+      var slip = E.computeRun([emp], fp.period, state.dtr, state.settings).slips[0];
+      var row = '<tr>' + head +
+        '<td class="num">' + box(emp, 'thirteenth') + plain(fp.thirteenth) +
+          '<div class="auto-note">' + (fp.thirteenthPaid ? plain(fp.thirteenthPaid) + ' paid already' : 'none paid yet') + '</div></td>' +
+        '<td class="num">' + box(emp, 'leave') +
+          '<input type="text" inputmode="decimal" data-fp-leave="' + id + '" value="' +
+          esc(cfg.leaveDays === undefined || cfg.leaveDays === null ? '' : cfg.leaveDays) + '" placeholder="' +
+          esc(plain(fp.leaveSuggested)) + '" style="width:56px" title="Days to convert; blank = the monetizable days"> days' +
+          '<div class="auto-note">' + plain(fp.leaveAmount) + ' at ' + plain(fp.dailyRate) + '/day' +
+          (fp.leaveTaxable ? ', ' + plain(fp.leaveTaxable) + ' taxable' : '') + '</div></td>' +
+        '<td class="num">' + box(emp, 'tax') + plain(fp.taxAdjustment) +
+          '<div class="auto-note">' + (fp.taxAdjustment >= 0 ? 'refund' : 'tax still due') + ' \u2014 due ' + plain(fp.annualTaxDue) +
+          ' on ' + plain(fp.annualTaxable) + ', withheld ' + plain(fp.ytdWithheld) + '</div></td>' +
+        '<td class="num">' + box(emp, 'loans') + plain(fp.loanBalance) + '</td>' +
+        '<td class="num">' + plain(fp.clearanceTotal) + '</td>' +
+        '<td class="num strong">' + (posted && d && d.posted ? '<span class="muted">from the payroll file</span>' : plain(slip.totals.netPay)) + '</td></tr>';
+      var notes = posted
+        ? '<div class="notice warn" style="margin:0 0 8px">This cutoff came from an imported payroll file, so the final pay ' +
+          'is not added to it. Choose a later cutoff, or use Recalculate this cutoff instead on Payroll Run.</div>' : '';
+      var clear = (cfg.clearance || []).map(function (c, i) {
+        return '<div style="display:flex;gap:6px;margin-bottom:4px">' +
+          '<input type="text" data-fp-cl-label="' + i + '" data-fp-emp="' + id + '" value="' + esc(c.label || '') +
+          '" placeholder="e.g. Laptop not returned" style="width:240px">' +
+          '<input type="text" inputmode="decimal" data-fp-cl-amount="' + i + '" data-fp-emp="' + id + '" value="' +
+          esc(amountValue(c.amount)) + '" placeholder="0.00" style="width:110px;text-align:right">' +
+          '<button class="btn ghost tiny danger" data-fp-cl-del="' + i + '" data-fp-emp="' + id + '" type="button">Remove</button></div>';
+      }).join('');
+      return row + '<tr class="fp-detail"><td></td><td colspan="8">' + notes +
+        '<strong style="font-size:12.5px">Clearance deductions</strong>' +
+        '<div style="margin-top:6px">' + clear + '</div>' +
+        '<button class="btn ghost tiny" data-fp-cl-add="' + id + '" type="button">+ Add clearance deduction</button></td></tr>';
+    }).join('');
+  }
+
+  function fpChanged() {
+    Store.saveEmployees(state.employees);
+    renderFinalPay();
+    renderRun();
+  }
+  function fpEmp(id) { return state.employees.filter(function (e) { return e.id === id; })[0]; }
+  function wireFinalPay() {
+    var body = $('#fpBody');
+    body.addEventListener('change', function (ev) {
+      var el = ev.target, emp, cfg;
+      if (el.dataset.fpPeriod !== undefined) {
+        emp = fpEmp(el.dataset.fpPeriod);
+        if (!el.value) delete emp.finalPay;
+        else { emp.finalPay = emp.finalPay || {}; emp.finalPay.periodId = el.value; }
+        return fpChanged();
+      }
+      emp = fpEmp(el.dataset.fpEmp || el.dataset.fpLeave);
+      if (!emp || !emp.finalPay) return;
+      cfg = emp.finalPay;
+      if (el.dataset.fpFlag) {
+        if (el.checked) delete cfg[el.dataset.fpFlag]; else cfg[el.dataset.fpFlag] = false;
+      } else if (el.dataset.fpLeave !== undefined) {
+        cfg.leaveDays = String(el.value).trim() === '' ? null : parseAmount(el.value);
+      } else if (el.dataset.fpClLabel !== undefined) {
+        cfg.clearance[+el.dataset.fpClLabel].label = String(el.value).trim();
+      } else if (el.dataset.fpClAmount !== undefined) {
+        cfg.clearance[+el.dataset.fpClAmount].amount = parseAmount(el.value);
+      } else return;
+      fpChanged();
+    });
+    body.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button');
+      if (!b) return;
+      var emp = fpEmp(b.dataset.fpEmp || b.dataset.fpClAdd);
+      if (!emp || !emp.finalPay) return;
+      var cfg = emp.finalPay;
+      cfg.clearance = cfg.clearance || [];
+      if (b.dataset.fpClAdd !== undefined) cfg.clearance.push({ label: '', amount: 0 });
+      else if (b.dataset.fpClDel !== undefined) cfg.clearance.splice(+b.dataset.fpClDel, 1);
+      else return;
+      fpChanged();
+    });
+  }
 
   function statusPill(emp) {
     var today = E.ymd(new Date());
@@ -3115,9 +3221,10 @@
      ===================================================================== */
   function switchTab(name) {
     $$('#tabs .tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
-    ['run', 'employees', 'holidays', 'yearend', 'payslip', 'settings'].forEach(function (n) {
+    ['run', 'finalpay', 'employees', 'holidays', 'yearend', 'payslip', 'settings'].forEach(function (n) {
       $('#tab-' + n).classList.toggle('hidden', n !== name);
     });
+    if (name === 'finalpay') renderFinalPay();
     if (name === 'employees') { renderEmployees(); renderItemsEditor(); renderLoansEditor(); }
     if (name === 'holidays') renderHolidays();
     if (name === 'yearend') renderYearEnd();
@@ -3145,7 +3252,6 @@
       renderHolidays();
     });
     $('#btnClearDtr').addEventListener('click', clearDtr);
-    $('#btnDeleteCutoffs').addEventListener('click', deleteAllCutoffs);
     $('#btnExportCsv').addEventListener('click', exportCsv);
     $('#btnExportBpi').addEventListener('click', exportBpi);
     $('#btnSendTrinity').addEventListener('click', sendToTrinity);
@@ -3167,6 +3273,7 @@
     $('#psBatches').addEventListener('click', psBatchClick);
     $('#psPreviewBatch').addEventListener('change', psLoadPreviewPeople);
     $('#psEmployee').addEventListener('change', psPreview);
+    wireFinalPay();
     $('#upFile').addEventListener('change', upRead);
     $('#wiseFile').addEventListener('change', wiseLoad);
     ['#upCompany', '#upCompanyOther', '#upAddress', '#upCurrency'].forEach(function (id) { $(id).addEventListener('change', upRead); });

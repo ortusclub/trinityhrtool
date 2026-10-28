@@ -519,6 +519,24 @@
       items.nonTaxAllowances.push({ label: 'Year-end non-taxable bonus', amount: r2(num(extra.yearEndBonus)) });
       items.totalNonTaxAllowance = r2(items.totalNonTaxAllowance + num(extra.yearEndBonus));
     }
+    /* Final pay (finalPayFor): unused leave is paid as an allowance, kept out
+       of this cutoff's withholding — the annual tax adjustment taxes what is
+       taxable of it — and the loan balance and clearance items come off. */
+    var fp = extra.finalPay;
+    if (fp) {
+      if (fp.leaveAmount) {
+        items.nonTaxAllowances.push({ label: 'Unused leave conversion \u2014 ' + fp.leaveDays + ' day/s', amount: fp.leaveAmount });
+        items.totalNonTaxAllowance = r2(items.totalNonTaxAllowance + fp.leaveAmount);
+      }
+      fp.loanRows.forEach(function (l) {
+        items.deductions.push({ label: l.label, amount: l.amount });
+        items.totalDeductions = r2(items.totalDeductions + l.amount);
+      });
+      fp.clearance.forEach(function (c) {
+        items.deductions.push({ label: c.label, amount: c.amount });
+        items.totalDeductions = r2(items.totalDeductions + c.amount);
+      });
+    }
     var exMilestones = num(dtr.exMilestones);
     if (exMilestones) {
       items.nonTaxAllowances.push({ label: 'Ex Milestones (company bonus)', amount: exMilestones });
@@ -531,9 +549,11 @@
       items.totalTaxableAllowance + items.totalNonTaxAllowance);
 
     /* ------------- statutory contributions (cols U, V, W) -------------- */
-    var sssShare = contributionShare(period, settings, 'sss');
-    var phicShare = contributionShare(period, settings, 'phic');
-    var hdmfShare = contributionShare(period, settings, 'hdmf');
+    // A cutoff they were never on staff for (only final pay lands there) owes none.
+    var offStaff = staff.total > 0 && staff.onStaff === 0;
+    var sssShare = offStaff ? 0 : contributionShare(period, settings, 'sss');
+    var phicShare = offStaff ? 0 : contributionShare(period, settings, 'phic');
+    var hdmfShare = offStaff ? 0 : contributionShare(period, settings, 'hdmf');
     // Contribution brackets read the ADJUSTED monthly rate, not emp.monthlyRate.
     var sssM = sssContribution(adjustment.monthly, settings);
     var phicM = philhealthContribution(adjustment.monthly, settings);
@@ -669,6 +689,7 @@
         otherDeduction: otherDeduction, reimbursement: reimbursement, taxRefund: taxRefund,
         customDeductions: items.deductions, total: postTaxDeductions
       },
+      finalPay: fp || null,
       otherDeductions: items.deductions,
       totalOtherDeductions: items.totalDeductions,
       employerCosts: items.employerCosts,
@@ -1122,6 +1143,80 @@
     };
   }
 
+  /** A cutoff by its id ("2026-11-P10"), from the year it names or either side. */
+  function periodById(id) {
+    var y = parseInt(String(id).slice(0, 4), 10), hit = null;
+    [y, y - 1, y + 1].forEach(function (yy) {
+      if (!hit && yy) hit = buildPeriods(yy).filter(function (p) { return p.id === id; })[0] || null;
+    });
+    return hit;
+  }
+
+  /**
+   * Final pay for someone leaving, paid in the cutoff emp.finalPay.periodId:
+   *   13th month   the year's 13th month not yet paid (pro rata, yearEndFor)
+   *   leave        unused leave × daily rate — the monetizable days unless
+   *                typed (leaveDays); tax-free up to finalPay.leaveExemptDays
+   *   loans        every loan's balance left after that cutoff's instalment
+   *   clearance    deductions typed for the clearance (laptop, advances …)
+   *   tax          the annual adjustment: tax withheld to date (that cutoff
+   *                included) less the tax due on the year's taxable income
+   *                plus the taxable part of the 13th month and the leave.
+   *                Positive is a refund. The 13th month and the leave are
+   *                kept out of that cutoff's own withholding so the tax on
+   *                them is counted once, here.
+   * Each part can be switched off (thirteenth/leave/tax/loans === false).
+   */
+  function finalPayFor(emp, dtrMap, settings) {
+    var cfg = emp.finalPay;
+    var period = cfg && cfg.periodId ? periodById(cfg.periodId) : null;
+    if (!period) return null;
+    var on = function (k) { return cfg[k] !== false; };
+    var workYear = parseInt(period.start.slice(0, 4), 10);
+    var taxYear = parseYmd(period.payoutDate).getFullYear();
+
+    var ye = yearEndFor(emp, workYear, dtrMap, settings);
+    var thirteenth = on('thirteenth') ? ye.thirteenthBalance : 0;
+    var thirteenthTaxable = on('thirteenth') ? ye.thirteenthBalanceTaxable : 0;
+
+    var leave = ye.leave, daily = rateSet(emp, settings).daily;
+    var typed = cfg.leaveDays !== undefined && cfg.leaveDays !== null && cfg.leaveDays !== '';
+    var leaveDays = on('leave') ? r2(Math.max(0, typed ? num(cfg.leaveDays) : leave.monetizableDays)) : 0;
+    var leaveAmount = r2(leaveDays * daily);
+    var exemptDays = num(((settings.finalPay || {}).leaveExemptDays));
+    var leaveTaxable = r2(Math.max(0, leaveDays - exemptDays) * daily);
+
+    var loanRows = [];
+    if (on('loans')) {
+      (emp.loans || []).forEach(function (loan) {
+        var d = loanDeduction(loan, period);
+        var left = d ? d.balanceAfter : 0;
+        if (left > 0) {
+          loanRows.push({ label: 'Loan balance \u2014 ' + (loan.type === 'sss' ? 'SSS' : 'loan') +
+            (loan.reference ? ' ' + loan.reference : '') + ' (final pay)', amount: r2(left) });
+        }
+      });
+    }
+    var clearance = (cfg.clearance || []).filter(function (c) { return num(c.amount) && String(c.label || '').trim(); })
+      .map(function (c) { return { label: String(c.label).trim(), amount: r2(num(c.amount)) }; });
+
+    var ytd = yearToDate(emp, taxYear, dtrMap, settings, period.payoutDate);
+    var annualTaxable = r2(ytd.taxableIncome + thirteenthTaxable + leaveTaxable);
+    var due = annualTax(annualTaxable, settings);
+    var taxAdjustment = on('tax') ? r2(ytd.taxWithheld - due) : 0;
+
+    return {
+      period: period,
+      thirteenth: thirteenth, thirteenthTaxable: thirteenthTaxable, thirteenthPaid: ye.thirteenthPaid,
+      leaveDays: leaveDays, leaveSuggested: leave.monetizableDays, leaveRemaining: leave.remaining,
+      leaveAmount: leaveAmount, leaveTaxable: leaveTaxable, dailyRate: r2(daily),
+      loanRows: loanRows, loanBalance: r2(loanRows.reduce(function (t, l) { return t + l.amount; }, 0)),
+      clearance: clearance, clearanceTotal: r2(clearance.reduce(function (t, c) { return t + c.amount; }, 0)),
+      ytdTaxable: ytd.taxableIncome, ytdWithheld: ytd.taxWithheld,
+      annualTaxable: annualTaxable, annualTaxDue: due, taxAdjustment: taxAdjustment
+    };
+  }
+
   /** Run the whole company for one period. */
   function computeRun(employees, period, dtrMap, settings) {
     var ye = settings.yearEnd || {};
@@ -1132,7 +1227,13 @@
     var slips = employees.map(function (emp) {
       var key = period.id + '|' + emp.id;
       var extra = null;
-      if (post13th || postRefund) {
+      var fp = emp.finalPay && emp.finalPay.periodId === period.id ? finalPayFor(emp, dtrMap, settings) : null;
+      // Someone paid their final pay already had their 13th month and tax settled then.
+      var settled = emp.finalPay && emp.finalPay.periodId && periodById(emp.finalPay.periodId) &&
+        periodById(emp.finalPay.periodId).payoutDate < period.payoutDate;
+      if (fp) {
+        extra = { thirteenthMonth: fp.thirteenth, thirteenthMonthTaxable: 0, taxRefund: fp.taxAdjustment, finalPay: fp };
+      } else if ((post13th || postRefund) && !settled) {
         var calc = yearEndFor(emp, year, dtrMap, settings);
         extra = {
           thirteenthMonth: post13th ? calc.thirteenthBalance : 0,
@@ -1179,6 +1280,8 @@
   }
 
   global.PayrollEngine = {
+    finalPayFor: finalPayFor,
+    periodById: periodById,
     r2: r2,
     num: num,
     ymd: ymd,

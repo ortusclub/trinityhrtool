@@ -69,9 +69,9 @@
           <select id="sort-run" class="sort-select" aria-label="Sort employees"></select>
         </div>
         <p class="hint">
-          <strong>Monthly rate</strong> and the timesheet cells are editable — every figure to the
-          right (daily/hourly rate, OT, SSS, PhilHealth, HDMF, withholding tax and net pay)
-          recomputes the moment you leave the cell.
+          <strong>Read-only.</strong> Every change comes in through the payroll template: <strong>Download
+          template (.xlsx)</strong>, fill it in, <strong>Import payroll files</strong>. The table then shows
+          each person's figures (daily/hourly rate, OT, SSS, PhilHealth, HDMF, withholding tax and net pay).
           Overtime is split by the three rates in the process document — <strong>1.25×</strong> regular
           workday, <strong>1.69×</strong> rest day or special non-working, <strong>2.60×</strong> regular
           holiday. <strong>ND hrs</strong> are hours worked 10:00PM–6:00AM, paid at hourly × 10%
@@ -87,17 +87,17 @@
           <thead>
             <tr class="group-head">
               <th colspan="3" class="grp-emp">Employee</th>
-              <th colspan="10" class="grp-dtr">Timesheet — hours &amp; days (editable)</th>
+              <th colspan="10" class="grp-dtr">Timesheet — hours &amp; days</th>
               <th colspan="5" class="grp-allow">Allowances</th>
               <th colspan="6" class="grp-earn">Earnings</th>
               <th colspan="5" class="grp-mand">Mandatory contributions</th>
-              <th colspan="7" class="grp-ded">Tax &amp; deductions (editable)</th>
+              <th colspan="7" class="grp-ded">Tax &amp; deductions</th>
               <th colspan="3" class="grp-net">Net</th>
             </tr>
             <tr>
               <th class="sticky-col">Employee name</th>
-              <th class="num" title="Monthly basic rate — editable. The daily and hourly figures below it are derived from the rate actually being paid, which includes any salary adjustment in force.">Rate ✎</th>
-              <th class="num" title="A salary change: the new monthly rate and the date it takes effect. Inside this cutoff it is split by working days; before it, the back pay since that date is added to this cutoff; later, it waits. The line underneath says what this cutoff does with it.">New rate ✎</th>
+              <th class="num" title="Monthly basic rate. The daily and hourly figures below it are derived from the rate actually being paid, which includes any salary adjustment in force.">Rate</th>
+              <th class="num" title="A salary change: the new monthly rate and the date it takes effect. Inside this cutoff it is split by working days; before it, the back pay since that date is added to this cutoff; later, it waits. The line underneath says what this cutoff does with it.">New rate</th>
 
               <th class="num" title="Days absent + unpaid leave">Abs</th>
               <th class="num" title="Paid time off taken — paid, and drawn from leave credits">PTO</th>
@@ -613,7 +613,7 @@
           <li><strong>Payroll Run</strong>: choose the pay period and year.</li>
           <li><strong>Download template (.xlsx)</strong> — always a fresh one.</li>
           <li>Fill in the cream columns: OT and ND hours; quarterly bonus and its <strong>details</strong> (";" between items, shown on the payslip); travel allowance and deductions; absences, late, undertime; Tendo, HMO, <strong>SSS loan</strong>, <strong>Class pass</strong>; other deduction; remarks.</li>
-          <li><strong>Import payroll files</strong> with it (or type straight into the table).</li>
+          <li><strong>Import payroll files</strong> with it. The Payroll Run table is read-only — to change anything, fix the template and import it again.</li>
           <li>Check the cards (gross, contributions, tax, <strong>net pay</strong>, cost to company), that nobody has a negative net pay, and a few people with the <strong>Payslip</strong> button on their row.</li>
         </ol>
         <h3>Payslips</h3>
@@ -630,8 +630,7 @@
         </ol>
         <h3>Salary increase</h3>
         <ol>
-          <li><strong>Payroll Run</strong>: choose the cutoff the increase starts in.</li>
-          <li>In their <strong>New rate</strong> cell, type the <strong>new monthly rate</strong> (e.g. 45,000) and the <strong>effective date</strong> in the date box under it.</li>
+          <li>In the cutoff's payroll template, fill in <strong>NEW RATE</strong> (the new monthly rate, e.g. 45,000) and <strong>NEW RATE EFFECTIVE DATE</strong> for that person, then <strong>Import payroll files</strong>. The import lists every salary change it applied.</li>
           <li>Effective inside the cutoff: it is split by working days (old rate before, new rate from the date; the note says e.g. <em>in force · 6/11 days</em>). Effective later: it shows greyed (<em>takes effect …</em>) until then. Contributions and tax follow the new rate.</li>
           <li>From the next cutoff the increase becomes their monthly rate on its own and the adjustment clears; a note says so.</li>
           <li>No mid-cutoff split needed: change the monthly rate on the <strong>Employees</strong> tab, or several at once with <strong>Download salary sheet</strong> → <strong>Import salaries</strong>. A payroll file with a different EMPLOYEE RATE also updates it.</li>

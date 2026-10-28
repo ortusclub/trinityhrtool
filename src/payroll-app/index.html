@@ -220,6 +220,11 @@
           Untick a part to leave it out.
         </p>
       </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 20px 12px">
+        <button class="btn ghost" id="btnFpRecord" type="button">Record final pay from payroll files</button>
+        <input type="file" id="fpFiles" accept=".xlsx,.xls" multiple style="display:none">
+        <span class="muted" style="font-size:12.5px">Reads the "Final Pay" tabs of past payroll files and marks those people's final pay as paid in that cutoff.</span>
+      </div>
       <div class="table-scroll" style="padding:0 20px 18px">
         <table class="grid compact" id="fpTable">
           <thead><tr>

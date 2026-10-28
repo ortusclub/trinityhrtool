@@ -357,6 +357,14 @@
       esc(v || '') + '"' + (d.posted ? ' disabled' : '') + ' style="width:160px">';
   }
 
+  /** What the quarterly bonus is for; printed under it on the payslip. */
+  function bonusDetailsInput(emp) {
+    var d = dtrFor(emp);
+    var v = d.posted ? d.posted.bonusDetails : d.bonusDetails;
+    return '<input type="text" data-emp="' + esc(emp.id) + '" data-field="bonusDetails" value="' +
+      esc(v || '') + '"' + (d.posted ? ' disabled' : '') + ' placeholder="details" style="width:120px;margin-top:4px">';
+  }
+
   function cellIn(cls, html) { return '<td class="' + cls + '">' + html + '</td>'; }
 
   /**
@@ -454,7 +462,7 @@
             ? '<div class="auto-note">' + e.deMinimisAuto.workDaysOnStaff + '/' +
               e.deMinimisAuto.workDaysTotal + ' days of ' + plain(e.deMinimisAuto.full) + '</div>'
             : '') + '</td>' +
-        cellIn('alw', dtrInput(emp, 'quarterlyBonus', false, 92, true)) +
+        cellIn('alw', dtrInput(emp, 'quarterlyBonus', false, 92, true) + bonusDetailsInput(emp)) +
 
         // ---- earnings ----
         '<td class="num' + (e.regularPay ? '' : ' zero') + '">' + plain(e.regularPay) +
@@ -476,6 +484,7 @@
         cellIn('dedin', dtrInput(emp, 'tendoPay', false, 88, true)) +
         cellIn('dedin', dtrInput(emp, 'sssLoan', false, 88, true) + autoNote(s.postTax.sssLoanAuto, 'loan')) +
         cellIn('dedin', dtrInput(emp, 'hmo', false, 88, true)) +
+        cellIn('dedin', dtrInput(emp, 'classPass', false, 88, true)) +
         cellIn('dedin', dtrInput(emp, 'otherDeduction', false, 88, true) +
           autoNote(s.postTax.otherLoanAuto + s.totalOtherDeductions, 'auto')) +
         cellIn('dedin', dtrInput(emp, 'reimbursement', false, 88, true)) +
@@ -492,7 +501,7 @@
 
     var sum = {};
     ['regularPay','otPay','ndPay','holRest','travel','gross','sss','phic','hdmf',
-     'afterMand','netTaxable','tax','tendo','sssLoan','hmo','other','reimb','net']
+     'afterMand','netTaxable','tax','tendo','sssLoan','hmo','classPass','other','reimb','net']
       .forEach(function (k) { sum[k] = 0; });
 
     state.run.slips.forEach(function (s) {
@@ -503,7 +512,7 @@
       sum.sss += c.sss; sum.phic += c.philhealth; sum.hdmf += c.pagibig;
       sum.afterMand += t.incomeAfterMandatories; sum.netTaxable += t.taxableIncome;
       sum.tax += t.withholding;
-      sum.tendo += p.tendoPay; sum.sssLoan += p.sssLoan; sum.hmo += p.hmo;
+      sum.tendo += p.tendoPay; sum.sssLoan += p.sssLoan; sum.hmo += p.hmo; sum.classPass += p.classPass;
       sum.other += p.otherDeduction + s.totalOtherDeductions; sum.reimb += p.reimbursement;
       sum.net += s.totals.netPay;
     });
@@ -525,6 +534,7 @@
       '<td class="num">' + plain(sum.tendo) + '</td>' +
       '<td class="num">' + plain(sum.sssLoan) + '</td>' +
       '<td class="num">' + plain(sum.hmo) + '</td>' +
+      '<td class="num">' + plain(sum.classPass) + '</td>' +
       '<td class="num">' + plain(sum.other) + '</td>' +
       '<td class="num">' + plain(sum.reimb) + '</td>' +
       '<td class="num net">' + plain(sum.net) + '</td>' +
@@ -600,7 +610,7 @@
     var d = dtrFor(emp);
     var field = el.dataset.field;
     var typed = String(el.value).trim();
-    var raw = typed === '' ? null : field === 'remarks' ? typed : parseAmount(typed);
+    var raw = typed === '' ? null : field === 'remarks' || field === 'bonusDetails' ? typed : parseAmount(typed);
     d[field] = raw;
 
     // Overtime after 7PM: the first 3 hours are OT only, anything past 10PM is
@@ -657,6 +667,7 @@
         regularPay: s.rates.semiMonthly, otHours: d.otHours, otPay: e.otPay,
         ndHours: d.ndHours, ndPay: e.ndPay,
         deMinimis: E.r2(e.deMinimis + e.deMinimisDeduction), quarterlyBonus: e.quarterlyBonus,
+        bonusDetails: e.quarterlyBonusDetails || '', sssLoan: p.sssLoan, classPass: p.classPass,
         travel: e.transportationGiven, absentDays: d.absentDays + d.unpaidLeaveDays,
         absenceDeduction: e.absenceDeduction, lateMinutes: d.lateMinutes,
         lateDeduction: e.lateDeduction, undertimeMinutes: d.undertimeMinutes,
@@ -665,7 +676,7 @@
         gross: e.grossPay, sss: c.sss, phic: c.philhealth, hdmf: c.pagibig,
         afterMandatories: t.incomeAfterMandatories, netTaxable: t.taxableIncome, tax: t.withholding,
         tendo: p.tendoPay, hmo: p.hmo,
-        other: E.r2(p.otherDeduction + p.sssLoan + s.totalOtherDeductions - p.reimbursement),
+        other: E.r2(p.otherDeduction + s.totalOtherDeductions - p.reimbursement),
         net: s.totals.netPay, sssER: er.sss, hdmfER: er.pagibig, phicER: er.philhealth, ec: er.sssEC,
         remarks: s.remarks || ''
       };
@@ -1003,25 +1014,33 @@
         Object.keys(v).forEach(function (k) { P[k] = v[k]; });
         if (P.rate === undefined) P.rate = E.num(emp.monthlyRate);
         P.remarks = row.remarks || '';
+        P.bonusDetails = row.bonusDetails || '';
         P.source = op.where;
         d = { posted: P };
         postedRows++;
       } else {
         delete d.posted;
         T.COLUMNS.forEach(function (c) {
-          if (!c.input || c.input === 'remarks' || c.input === 'otherDeduction') return;
+          if (!c.input || c.input === 'remarks' || c.input === 'bonusDetails' || c.input === 'otherDeduction') return;
           if (v[c.key] === undefined) delete d[c.input];
           else d[c.input] = v[c.key];
         });
         delete d.lateHours;   // now counted in minutes
         d.remarks = row.remarks || null;
-        // OTHER DEDUCTION was written out with loans and recurring
-        // deductions in it; take those back out to leave what was typed.
-        if (v.other !== undefined) {
+        d.bonusDetails = row.bonusDetails || null;
+        // SSS LOAN and OTHER DEDUCTION were written out with the loan ledger
+        // and recurring deductions in them; take those back out to leave
+        // what was typed. A file without SSS LOAN has it inside OTHER.
+        if (v.other !== undefined || v.sssLoan !== undefined) {
+          if (v.sssLoan !== undefined) d.sssLoan = null;
           d.otherDeduction = null;
           var probe = E.computePayslip(emp, period, d, state.settings);
-          var auto = probe.postTax.sssLoan + probe.postTax.otherLoanAuto + probe.totalOtherDeductions;
-          d.otherDeduction = Math.max(0, E.r2(v.other - auto)) || null;
+          var sssAuto = v.sssLoan !== undefined ? probe.postTax.sssLoanAuto : probe.postTax.sssLoan;
+          if (v.sssLoan !== undefined) d.sssLoan = Math.max(0, E.r2(v.sssLoan - sssAuto)) || null;
+          if (v.other !== undefined) {
+            var auto = (v.sssLoan !== undefined ? 0 : sssAuto) + probe.postTax.otherLoanAuto + probe.totalOtherDeductions;
+            d.otherDeduction = Math.max(0, E.r2(v.other - auto)) || null;
+          }
         }
         if (v.ndHours !== undefined) d.ndManual = true;
         if (v.rate && v.rate !== E.num(emp.monthlyRate) && E.num(emp.monthlyRate)) {
@@ -1261,7 +1280,12 @@
     if (e.restDayPay) add(earn, 'Rest Day Work — ' + slip.dtr.restDayHours + ' hr', e.restDayPay);
     if (e.regHolidayPay) add(earn, 'Regular Holiday Premium — ' + slip.dtr.regHolidayDays + ' day/s', e.regHolidayPay);
     if (e.specialHolidayPay) add(earn, 'Special Holiday Premium — ' + slip.dtr.specialHolidayDays + ' day/s', e.specialHolidayPay);
-    if (e.quarterlyBonus) add(earn, 'Quarterly Bonus', e.quarterlyBonus);
+    if (e.quarterlyBonus) {
+      add(earn, 'Quarterly Bonus (taxable)', e.quarterlyBonus);
+      String(e.quarterlyBonusDetails || '').split(/\n|;/).forEach(function (t) {
+        if (t.trim()) add(earn, t.trim(), null, 'sub');
+      });
+    }
     if (e.thirteenthMonth) add(earn, '13th Month Pay', e.thirteenthMonth);
     if (e.deMinimis) add(earn, 'De Minimis', e.deMinimis);
     if (slip.posted && e.holidayPay) add(earn, 'Holiday / Rest Day Pay', e.holidayPay);
@@ -1295,6 +1319,7 @@
     if (p.tendoPay) add(ded, 'Tendo Pay', p.tendoPay);
     if (p.sssLoan) add(ded, 'SSS Loan', p.sssLoan);
     if (p.hmo) add(ded, 'HMO', p.hmo);
+    if (p.classPass) add(ded, 'Class Pass', p.classPass);
     if (p.otherDeduction) add(ded, 'Other Loan / Deduction', p.otherDeduction);
     if (slip.postedNetAdjustment) add(ded, 'Adjustment (per payroll file)', -slip.postedNetAdjustment);
     /* Installment detail only. The engine already folds each loan's due amount

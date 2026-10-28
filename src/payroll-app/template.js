@@ -42,6 +42,8 @@
     { head: 'NIGHT DIFFERENTIAL PAY', key: 'ndPay', width: 12 },
     { head: 'DE MINIMIS (DM)', key: 'deMinimis', width: 11 },
     { head: 'QUARTERLY BONUS TAXABLE', key: 'quarterlyBonus', input: 'quarterlyBonus', width: 12 },
+    // What the bonus is for, printed under it on the payslip.
+    { head: 'QUARTERLY BONUS DETAILS', key: 'bonusDetails', input: 'bonusDetails', width: 28 },
     { head: 'TRAVEL ALLOWANCE', key: 'travel', input: 'transportationAllowance', width: 12,
       alias: ['TRANSPORTATION ALLOWANCE'] },
     { head: 'DAYS ABSENT', key: 'absentDays', input: 'absentDays', width: 9 },
@@ -67,6 +69,8 @@
     { head: 'TAX', key: 'tax', width: 11 },
     { head: 'TENDO PAY', key: 'tendo', input: 'tendoPay', width: 11 },
     { head: 'HMO', key: 'hmo', input: 'hmo', width: 10 },
+    { head: 'SSS LOAN', key: 'sssLoan', input: 'sssLoan', width: 11 },
+    { head: 'CLASS PASS DEDUCTION', key: 'classPass', input: 'classPass', width: 12, alias: ['CLASS PASS'] },
     { head: 'OTHER DEDUCTION', key: 'other', input: 'otherDeduction', width: 12, alias: ['OTHER DEDUCTIONS'] },
     { head: 'NET PAY', key: 'net', width: 13 },
     { head: 'SSS ER CONTRIBUTION', key: 'sssER', width: 12 },
@@ -75,7 +79,7 @@
     { head: 'EC', key: 'ec', width: 8 },
     { head: 'Remarks', key: 'remarks', input: 'remarks', width: 30 }
   ];
-  var TEXT_KEYS = { id: 1, name: 1, position: 1, department: 1, remarks: 1 };
+  var TEXT_KEYS = { id: 1, name: 1, position: 1, department: 1, remarks: 1, bonusDetails: 1 };
 
   /* Columns the company's payroll files have carried at one time or another
      that this layout does not: read from past files so the record is whole,
@@ -87,7 +91,6 @@
     { key: 'exMilestones', test: /^EX MILESTONES?$/ },
     { key: 'basicAdj', test: /^(ADHOC PAYMENT - )?BASIC ADJ(USTMENT)?$/ },
     { key: 'salaryAdj', test: /^(ADHOC PAYMENT - )?SALARY ADJ(USTMENT)?$/ },
-    { key: 'sssLoan', test: /^SSS LOAN$/ },
     { key: 'taxRefund', test: /^TAX REFUND/ },
     { key: 'reimbursement', test: /^REIMBURSEMENTS?$/ }
   ];
@@ -130,13 +133,14 @@
       /* What the site adds that has no column here — rest-day and holiday
          premiums, recurring allowances, 13th month, reimbursements — rides
          inside the formulas as a constant so GROSS and NET PAY still agree
-         with the site. Recurring deductions and loans sit in OTHER
-         DEDUCTION, and the import takes them back out. */
+         with the site. SSS loan amortisations sit in SSS LOAN; other loans
+         and recurring deductions in OTHER DEDUCTION. The import takes
+         both back out. */
       var extraGross = E2(e.otPayRestSpecial + e.otPayRegHoliday + e.restDayPay + e.holidayPay +
         e.thirteenthMonth + e.totalTaxableAllowance + e.totalNonTaxAllowance);
       var extraNonTax = E2(e.totalNonTaxAllowance + e.thirteenthExempt);
       var extraNet = E2(p.reimbursement + p.taxRefund);
-      var autoOther = E2(p.sssLoan + p.otherLoanAuto + s.totalOtherDeductions);
+      var autoOther = E2(p.otherLoanAuto + s.totalOtherDeductions);
       var mand = settings.replicateSheetFormula
         ? C('phic') + '+' + C('hdmf') : C('sss') + '+' + C('phic') + '+' + C('hdmf');
 
@@ -157,6 +161,7 @@
         ndPay: rf ? f('ROUND(' + hourly + '*' + prem.nd + '*' + C('ndHours') + ',2)') : n(0),
         deMinimis: n(e.deMinimisAuto.full),
         quarterlyBonus: inp(e.quarterlyBonus),
+        bonusDetails: { v: e.quarterlyBonusDetails || '', t: 's', s: S.INPUT },
         travel: inp(e.transportationGiven),
         absentDays: inp(d.absentDays + d.unpaidLeaveDays),
         absenceDeduction: f('ROUND(' + daily + '*' + C('absentDays') + ',2)'),
@@ -178,9 +183,11 @@
         tax: settings.applyWithholdingTax ? f(taxFormula(C('netTaxable'), settings.taxTable)) : n(0),
         tendo: inp(p.tendoPay),
         hmo: inp(p.hmo),
+        sssLoan: inp(p.sssLoan),
+        classPass: inp(p.classPass),
         other: inp(E2(p.otherDeductionManual + autoOther)),
         net: f(C('afterMandatories') + '-(' + C('tax') + '+' + C('tendo') + '+' + C('hmo') + '+' +
-          C('other') + ')' + (extraNet ? '+' + extraNet : '')),
+          C('sssLoan') + '+' + C('classPass') + '+' + C('other') + ')' + (extraNet ? '+' + extraNet : '')),
         sssER: n(er.sss), hdmfER: n(er.pagibig), phicER: n(er.philhealth), ec: n(er.sssEC),
         remarks: { v: s.remarks || '', t: 's', s: S.INPUT }
       };

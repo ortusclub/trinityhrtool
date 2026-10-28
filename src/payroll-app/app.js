@@ -2514,7 +2514,7 @@
               (b.published_at ? '<span class="pill rf">Published</span>' : '<span class="pill spc">Draft</span>') +
               '</td><td style="white-space:nowrap">' +
               '<button class="btn ghost tiny" data-bview="' + i + '" type="button">Preview</button> ' +
-              (b.kind === 'notax' || b.kind === 'xk' ? '<button class="btn ghost tiny" data-bwise="' + i + '" type="button">Wise CSV</button> ' : '') +
+              (b.kind === 'notax' ? '<button class="btn ghost tiny" data-bwise="' + i + '" type="button">Wise CSV</button> ' : '') +
               (b.published_at
                 ? '<button class="btn ghost tiny" data-bunpub="' + i + '" type="button">Unpublish</button> '
                 : '<button class="btn tiny" data-bpub="' + i + '" type="button"' + (b.count ? '' : ' disabled') + '>Publish</button> ') +
@@ -2633,8 +2633,25 @@
   }
   function wiseExport(b) {
     psApi('payslips?batch=' + encodeURIComponent(b.id)).then(function (d) {
-      var rec = wiseRecipients(), byName = {};
-      Object.keys(rec).forEach(function (e) { byName[wiseKey(rec[e].name)] = e; });
+      // Wise often has someone's personal email, so after the work email try
+      // the roster's personal email, then first + last name.
+      var rec = wiseRecipients(), byName = {}, byFirstLast = {};
+      var firstLast = function (name) { var w = wiseKey(name).split(' '); return w[0] + ' ' + w[w.length - 1]; };
+      Object.keys(rec).forEach(function (e) {
+        byName[wiseKey(rec[e].name)] = e;
+        var k = firstLast(rec[e].name);
+        byFirstLast[k] = byFirstLast[k] && byFirstLast[k] !== e ? null : e;   // two people: neither
+      });
+      var roster = {};
+      state.employees.forEach(function (emp) { if (emp.email) roster[String(emp.email).trim().toLowerCase()] = emp; });
+      var recipientOf = function (p) {
+        var email = (p.email || '').toLowerCase(), emp = roster[email];
+        return rec[email] ||
+          (emp && emp.personalEmail && rec[String(emp.personalEmail).trim().toLowerCase()]) ||
+          rec[byName[wiseKey(p.name)]] ||
+          (emp && rec[byFirstLast[firstLast(emp.firstName + ' ' + emp.lastName)]]) ||
+          rec[byFirstLast[firstLast(p.name)]];
+      };
       var source = String(state.settings.wise.sourceCurrency || 'USD').trim().toUpperCase();
       // Reference: initials + the payroll's month and year, "AG102026 - Salary".
       var lm = String(b.label).match(/^([A-Za-z]+) (\d{4})$/), mi = lm ? MONTHS.indexOf(lm[1]) : -1;
@@ -2645,7 +2662,7 @@
       };
       var files = {}, missing = [];
       d.payslips.slice().sort(function (x, y) { return x.name.localeCompare(y.name); }).forEach(function (p) {
-        var r = rec[(p.email || '').toLowerCase()] || rec[byName[wiseKey(p.name)]];
+        var r = recipientOf(p);
         if (!r) missing.push(p.name + ' (' + p.currency + ')');
         var file = p.currency === 'EUR' ? 'EUR' : 'other';
         (files[file] = files[file] || []).push([

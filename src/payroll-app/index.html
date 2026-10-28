@@ -471,7 +471,8 @@
         <p class="hint" style="display:block">
           Download a template, fill it in (Excel or Google Sheets) and upload it here as .xlsx or .csv.
           The Payslip Generator sheet's CSV works too. Each row becomes a payslip for the TrinityHR
-          account with that email. Uploading the same payroll and payout date again replaces it.
+          account with that email. The company on each payslip follows the person's country in User
+          Management. Uploading the same payroll and payout date again replaces it.
         </p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 20px 12px">
@@ -480,7 +481,8 @@
       </div>
       <div class="form-grid" style="padding:0 20px 8px">
         <label>Filled-in file (.xlsx or .csv) <input type="file" id="upFile" accept=".xlsx,.csv,text/csv"></label>
-        <label>Company on the payslip <input type="text" id="upCompany" value="Ortus Strategy Branch in Kosovo"></label>
+        <label>Company on the payslip — Kosovo <input type="text" id="upCompany" value="Ortus Strategy Kosovo Branch"></label>
+        <label>Company on the payslip — everyone else <input type="text" id="upCompanyOther" value="Ortus Strategy Pte Ltd"></label>
         <label>Company address (optional) <input type="text" id="upAddress" value=""></label>
         <label>Currency when blank (No-Tax) <input type="text" id="upCurrency" value="EUR" maxlength="3" style="text-transform:uppercase"></label>
       </div>

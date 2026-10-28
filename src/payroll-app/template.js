@@ -86,6 +86,18 @@
     { head: 'EC', key: 'ec', width: 8 },
     { head: 'Remarks', key: 'remarks', input: 'remarks', width: 30 }
   ];
+  /* The format of each column to fill in, written in row 2 above its header.
+     No month names: the importer reads the cutoff from the title rows. */
+  var FORMAT_HINTS = {
+    newRate: 'monthly, e.g. 45,000.00', newRateDate: 'date, e.g. 2026-09-15',
+    otHours: 'hours, e.g. 2.5', ndHours: 'hours, e.g. 1.5',
+    quarterlyBonus: 'amount, e.g. 5,000.00', bonusDetails: 'text; ";" between items',
+    travel: 'amount, e.g. 800.00', absentDays: 'days, e.g. 1 or 0.5',
+    lateMinutes: 'minutes, e.g. 15', undertimeMinutes: 'minutes, e.g. 30',
+    travelDeduction: 'amount, e.g. 200.00', tendo: 'amount, e.g. 1,000.00', hmo: 'amount, e.g. 1,000.00',
+    sssLoan: 'amount, e.g. 1,000.00', classPass: 'amount, e.g. 1,000.00', other: 'amount, e.g. 500.00',
+    remarks: 'text'
+  };
   var TEXT_KEYS = { id: 1, name: 1, position: 1, department: 1, remarks: 1, bonusDetails: 1, newRateDate: 1 };
 
   /* Columns the company's payroll files have carried at one time or another
@@ -116,7 +128,12 @@
   function payrollSheet(run, period, settings) {
     var rows = [];
     rows.push([{ v: 'Company Name: ' + settings.company.name, t: 's', s: S.BOLD }]);
-    rows.push([{ v: 'Payroll | ' + cutoffTitle(period), t: 's', s: S.BOLD }]);
+    // Row 2: the title, then above each column to fill in, what goes there.
+    var title = [{ v: 'Payroll | ' + cutoffTitle(period), t: 's', s: S.BOLD }];
+    PAYROLL_COLUMNS.forEach(function (c, i) {
+      if (FORMAT_HINTS[c.key]) title[i] = { v: FORMAT_HINTS[c.key], t: 's', s: S.NOTE };
+    });
+    rows.push(title);
     rows.push(PAYROLL_COLUMNS.map(function (c) { return { v: c.head, t: 's', s: S.HEAD_TAN }; }));
 
     var at = {};

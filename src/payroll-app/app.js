@@ -716,6 +716,7 @@
       var emp = s.employee, who = emp.lastName + ', ' + emp.firstName;
       var acct = String(emp.bankAccountNo || '').replace(/\D/g, ''), net = E.r2(s.totals.netPay);
       if (!(net > 0)) return;
+      if (isBpi(emp) && acct.length === 9) acct = '0' + acct;   // leading 0 lost when the 201 sheet stored it as a number
       if (!isBpi(emp)) check.push(who + ' \u2014 ' + (emp.bankName || 'no bank') + ', ' + peso(net));
       else if (acct.length !== 10) check.push(who + ' \u2014 BPI account number is not 10 digits, ' + peso(net));
       rows.push({ acct: acct, net: net, name: who });

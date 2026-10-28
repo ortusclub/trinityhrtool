@@ -628,6 +628,15 @@
           <li>Read the popup: people not on BPI (e.g. GCash), account numbers that are not 10 digits, no bank on file, negative net pay (not in the file). Pay those separately.</li>
           <li>Upload in <strong>BPI BizLink</strong> as "Pay BPI Accounts – Lumpsum" and check the total. <strong>Export CSV</strong> keeps a record of the cutoff.</li>
         </ol>
+        <h3>Salary increase</h3>
+        <ol>
+          <li><strong>Payroll Run</strong>: choose the cutoff the increase starts in.</li>
+          <li>In their <strong>Salary adj.</strong> cell, type the increase as the monthly difference (40,000 → 45,000 is <strong>5,000</strong>) and the <strong>effective date</strong> in the date box under it.</li>
+          <li>Effective inside the cutoff: it is split by working days (old rate before, new rate from the date; the note says e.g. <em>in force · 6/11 days</em>). Effective later: it shows greyed (<em>takes effect …</em>) until then. Contributions and tax follow the new rate.</li>
+          <li>From the next cutoff the increase becomes their monthly rate on its own and the adjustment clears; a note says so.</li>
+          <li>No mid-cutoff split needed: change the monthly rate on the <strong>Employees</strong> tab, or several at once with <strong>Download salary sheet</strong> → <strong>Import salaries</strong>. A payroll file with a different EMPLOYEE RATE also updates it.</li>
+          <li>Backdated to a cutoff already paid: the difference owed is not added on its own. Add it in the current cutoff by hand, e.g. as a quarterly bonus with "Salary increase back pay (Oct)" in its details.</li>
+        </ol>
         <h3>Resignee</h3>
         <ol>
           <li>Set their <strong>last day of work</strong> on the Employees tab (or the next 201 File import brings it).</li>
@@ -667,6 +676,11 @@
           <li>Read the popup: the rate used, anyone paid <strong>through BPI</strong> instead (e.g. Roman), anyone with <strong>no Wise recipient</strong> (blank recipientId), any split that did not add up.</li>
           <li>Upload both CSVs in <strong>Wise</strong> batch payments, check the totals against the batch, fund it.</li>
           <li>Pay the BPI people in <strong>BizLink</strong> by hand with the amounts shown.</li>
+        </ol>
+        <h3>Salary increase</h3>
+        <ol>
+          <li>Put the new amount in <strong>Gross salary</strong> in that month's payroll file. Nothing else to set up; the Wise CSV pays the new net.</li>
+          <li>Backdated: add the difference in the same row as a <strong>bonus</strong>, with a description like "Salary increase back pay (Oct)".</li>
         </ol>
         <h3>Resignee</h3>
         <ol>

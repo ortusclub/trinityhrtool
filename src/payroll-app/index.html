@@ -97,7 +97,7 @@
             <tr>
               <th class="sticky-col">Employee name</th>
               <th class="num" title="Monthly basic rate — editable. The daily and hourly figures below it are derived from the rate actually being paid, which includes any salary adjustment in force.">Rate ✎</th>
-              <th class="num" title="Salary adjustment and the date it takes effect — both editable, and both saved onto the employee so they keep applying to later cutoffs. An increase adds to the monthly rate from that date; use a negative for a decrease. The line underneath says what this cutoff is actually doing with it.">Salary adj. ✎</th>
+              <th class="num" title="A salary change: the new monthly rate and the date it takes effect. Inside this cutoff it is split by working days; before it, the back pay since that date is added to this cutoff; later, it waits. The line underneath says what this cutoff does with it.">New rate ✎</th>
 
               <th class="num" title="Days absent + unpaid leave">Abs</th>
               <th class="num" title="Paid time off taken — paid, and drawn from leave credits">PTO</th>
@@ -631,11 +631,11 @@
         <h3>Salary increase</h3>
         <ol>
           <li><strong>Payroll Run</strong>: choose the cutoff the increase starts in.</li>
-          <li>In their <strong>Salary adj.</strong> cell, type the increase as the monthly difference (40,000 → 45,000 is <strong>5,000</strong>) and the <strong>effective date</strong> in the date box under it.</li>
+          <li>In their <strong>New rate</strong> cell, type the <strong>new monthly rate</strong> (e.g. 45,000) and the <strong>effective date</strong> in the date box under it.</li>
           <li>Effective inside the cutoff: it is split by working days (old rate before, new rate from the date; the note says e.g. <em>in force · 6/11 days</em>). Effective later: it shows greyed (<em>takes effect …</em>) until then. Contributions and tax follow the new rate.</li>
           <li>From the next cutoff the increase becomes their monthly rate on its own and the adjustment clears; a note says so.</li>
           <li>No mid-cutoff split needed: change the monthly rate on the <strong>Employees</strong> tab, or several at once with <strong>Download salary sheet</strong> → <strong>Import salaries</strong>. A payroll file with a different EMPLOYEE RATE also updates it.</li>
-          <li>Backdated to a cutoff already paid: the difference owed is not added on its own. Add it in the current cutoff by hand, e.g. as a quarterly bonus with "Salary increase back pay (Oct)" in its details.</li>
+          <li>Backdated (effective before the cutoff you are on): the new rate is in force from this cutoff, and the <strong>back pay</strong> since the effective date is worked out and added here as "Salary adjustment — back pay (Sep 15 – Oct 15)" — taxable, counted toward the 13th month. Per earlier cutoff: (new − old) ÷ 2 × working days at the new rate ÷ working days in it. The cell shows it, with <em>remove</em> if it should not be paid.</li>
         </ol>
         <h3>Resignee</h3>
         <ol>

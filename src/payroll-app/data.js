@@ -268,6 +268,8 @@
     } catch (e) {
       console.warn('Could not save ' + key, e);
     }
+    // Shared with the other admins through TrinityHR (sync.js).
+    if (global.PayrollSync) global.PayrollSync.changed(key, value);
   }
 
   var Store = {

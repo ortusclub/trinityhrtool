@@ -9,8 +9,8 @@ export default async function PayrollPage() {
         <h1 className="font-display text-[26px] leading-tight text-gray-900">Payroll</h1>
         <p className="text-gray-600">
           Philippine semi-monthly payroll: salaries, benefits, deductions and
-          payslips. Data is kept in this browser; use Employees → Restore backup
-          to bring in a backup from the old payroll site.
+          payslips. Shared by all HR admins: changes save for everyone, and
+          someone else&apos;s changes show after a reload.
         </p>
       </div>
       <iframe

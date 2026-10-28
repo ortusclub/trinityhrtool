@@ -2583,7 +2583,8 @@
   /* ---- Wise bulk payments for Non-Trinity batches ----
      Wise's bulk CSV pays existing recipients by ID, which TrinityHR doesn't
      have, so they're remembered from a Wise CSV already used (by email, in
-     the shared settings). One file per currency other than PHP; anyone with
+     the shared settings). Two files, as Wise is paid: EUR, and every other
+     currency together ("PHP USD"); anyone with
      no remembered recipient still gets a row, listed to fill in. The
      reference is initials + the payroll's MMYYYY, as in past Wise files. */
   var WISE_HEAD = ['recipientId', 'name', 'recipientEmail', 'recipientDetail', 'sourceCurrency', 'targetCurrency',
@@ -2642,18 +2643,25 @@
         return (r && r.initials) || (String(p.code).match(/^[A-Za-z]+/) || [''])[0].toUpperCase() ||
           wiseKey(p.name).split(' ').map(function (w) { return w.charAt(0); }).join('').toUpperCase();
       };
-      var files = {}, missing = [], php = 0;
+      var files = {}, missing = [];
       d.payslips.slice().sort(function (x, y) { return x.name.localeCompare(y.name); }).forEach(function (p) {
-        if (p.currency === 'PHP') { php++; return; }
         var r = rec[(p.email || '').toLowerCase()] || rec[byName[wiseKey(p.name)]];
         if (!r) missing.push(p.name + ' (' + p.currency + ')');
-        (files[p.currency] = files[p.currency] || []).push([
+        var file = p.currency === 'EUR' ? 'EUR' : 'other';
+        (files[file] = files[file] || []).push([
           r ? r.id : '', r ? r.name : p.name, p.email || '', r ? r.detail : '', source, p.currency,
           'target', String(E.r2(p.net_pay)), initials(p, r) + when + ' - Salary', '', r ? r.type : 'PERSON'
         ]);
       });
-      var curs = Object.keys(files).sort();
-      if (!curs.length) { alert('This batch has no payslips outside PHP.'); return; }
+      // The non-EUR file is named by what's in it, "PHP USD".
+      var nameOf = function (f) {
+        if (f === 'EUR') return 'EUR';
+        var seen = {};
+        files.other.forEach(function (r) { seen[r[5]] = 1; });
+        return Object.keys(seen).sort().join(' ');
+      };
+      var curs = ['EUR', 'other'].filter(function (f) { return files[f]; });
+      if (!curs.length) { alert('This batch has no payslips.'); return; }
       curs.forEach(function (cur, i) {
         var csv = [WISE_HEAD].concat(files[cur]).map(function (r) {
           return r.map(function (v) { return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(',');
@@ -2661,11 +2669,10 @@
         // A moment apart, or the browser keeps only the first download.
         setTimeout(function () {
           window.XlsxWriter.download(new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
-            'Bulk Uploads - ' + b.label + ' ' + cur + '.csv');
+            'Bulk Uploads - ' + b.label + ' ' + nameOf(cur) + '.csv');
         }, i * 600);
       });
-      var msg = [curs.map(function (c) { return files[c].length + ' in ' + c; }).join(', ') + ' \u2014 one Wise CSV per currency.'];
-      if (php) msg.push(php + ' PHP payslip(s) left out (pay those through BPI).');
+      var msg = [curs.map(function (c) { return files[c].length + ' in ' + nameOf(c); }).join(', ') + ' \u2014 one Wise CSV each.'];
       if (missing.length) msg.push('\nNo Wise recipient remembered for these, so their recipientId is blank \u2014 fill it in, ' +
         'or load a Wise CSV that has them (' + missing.length + '):\n  ' + missing.join('\n  '));
       alert(msg.join('\n'));

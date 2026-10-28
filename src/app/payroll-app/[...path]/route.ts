@@ -4,12 +4,13 @@ import { requireRole } from "@/lib/auth/helpers";
 
 // The Trinity PH payroll app (src/payroll-app), shown inside /admin/payroll.
 // Served from here rather than public/ so only hr_admin and up can load it.
-// Its data stays in the admin's browser (localStorage), as it did on the
-// standalone payroll site.
+// Its data is shared by all admins through /api/payroll/state (sync.js),
+// with this browser's localStorage as the working copy.
 const FILES: Record<string, string> = {
   "index.html": "text/html; charset=utf-8",
   "styles.css": "text/css; charset=utf-8",
   "app.js": "text/javascript; charset=utf-8",
+  "sync.js": "text/javascript; charset=utf-8",
   "data.js": "text/javascript; charset=utf-8",
   "engine.js": "text/javascript; charset=utf-8",
   "hr201.js": "text/javascript; charset=utf-8",

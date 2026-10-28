@@ -3139,5 +3139,7 @@
     applySort('run');
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  // Started by sync.js once the shared payroll is loaded.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
 })();

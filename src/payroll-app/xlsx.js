@@ -603,6 +603,7 @@
     colName: colName,
     read: read,
     unzip: unzip,
+    loadSheetJs: loadLegacyLib,
     S: { DEFAULT: 0, BOLD: 1, NUM: 2, TOTAL: 3, TITLE: 4,
          HEAD: 5, HEAD_CALC: 6, HEAD_INPUT: 7, INPUT: 8, CALC: 9, NOTE: 10, INT: 11, DATE: 12,
          INPUT_DATE: 13, HEAD_TAN: 14 }

@@ -695,6 +695,64 @@
   }
 
 
+  /* ------------------------- BPI bank file (.xls) -------------------------
+     BPI BizLink's "Pay BPI Accounts — Lumpsum" upload: an H row with the
+     totals and the funding account, a header row, then one D row per
+     person: BPI account, net pay, remarks. Only BPI accounts can go in it,
+     so anyone else is listed after the download to be paid another way. */
+  function isBpi(emp) {
+    return /\bbpi\b|philippine islands/i.test(emp.bankName || '');
+  }
+  function exportBpi() {
+    var funding = String(state.settings.company.bpiFundingAccount || '').replace(/\D/g, '');
+    if (!funding) {
+      alert('Add the BPI funding account first: Settings & Rules \u2192 Company \u2192 BPI funding account.');
+      return;
+    }
+    var remarks = 'Salary ' + window.PayrollTemplate.cutoffTitle(state.period);
+    var rows = [], skipped = [];
+    state.run.slips.forEach(function (s) {
+      var emp = s.employee, who = emp.lastName + ', ' + emp.firstName;
+      var acct = String(emp.bankAccountNo || '').replace(/\D/g, ''), net = E.r2(s.totals.netPay);
+      if (!(net > 0)) return;
+      if (!isBpi(emp)) skipped.push(who + ' \u2014 ' + (emp.bankName || 'no bank') + ', ' + peso(net));
+      else if (acct.length !== 10) skipped.push(who + ' \u2014 BPI account number is not 10 digits, ' + peso(net));
+      else rows.push({ acct: acct, net: net });
+    });
+    if (!rows.length) { alert('Nobody on this cutoff has a BPI account and net pay to send.'); return; }
+
+    window.XlsxWriter.loadSheetJs().then(function (XL) {
+      var total = E.r2(rows.reduce(function (t, r) { return t + r.net; }, 0));
+      var str = function (v) { return { t: 's', v: v }; };
+      var ws = {
+        A1: str('H'), B1: str('Total Amount:'),
+        C1: { t: 'n', v: total, f: 'SUM(C3:C9993)', z: '#,##0.00' },
+        D1: str('Total Count:'), E1: { t: 'n', v: rows.length, f: 'COUNTA(C3:C9993)' },
+        F1: str('FUNDING ACCOUNT'), G1: str(funding),
+        A2: str('DETAIL CONSTANT'), B2: str('BENEFICIARY ACCOUNT'), C2: str('AMOUNT'), D2: str('REMARKS')
+      };
+      rows.forEach(function (r, i) {
+        var n = i + 3;
+        ws['A' + n] = str('D');
+        ws['B' + n] = str(r.acct);   // text, so leading zeros stay
+        ws['C' + n] = { t: 'n', v: r.net, z: '#,##0.00' };
+        ws['D' + n] = str(remarks);
+      });
+      ws['!ref'] = 'A1:G' + (rows.length + 2);
+      ws['!cols'] = [20.5, 21.8, 20.4, 20.4, 20.4, 20.5, 20.4].map(function (w) { return { wch: w }; });
+      var wb = XL.utils.book_new();
+      XL.utils.book_append_sheet(wb, ws, 'Sheet1');
+      var out = XL.write(wb, { bookType: 'biff8', type: 'array' });
+      window.XlsxWriter.download(new Blob([out], { type: 'application/vnd.ms-excel' }),
+        'BizLink_Pay BPI Accounts Lumpsum - ' + state.period.id + '.xls');
+      if (skipped.length) {
+        alert(rows.length + ' BPI account(s), ' + peso(total) + ', are in the file.\n\nNot in it \u2014 pay these another way (' +
+          skipped.length + '):\n  ' + skipped.join('\n  '));
+      }
+    }).catch(function (err) { alert('Could not make the BPI file.\n\n' + err.message); });
+  }
+
+
   /* =====================================================================
      TEMPLATE — download and re-import
      ===================================================================== */
@@ -2834,6 +2892,7 @@
     $('#btnClearDtr').addEventListener('click', clearDtr);
     $('#btnDeleteCutoffs').addEventListener('click', deleteAllCutoffs);
     $('#btnExportCsv').addEventListener('click', exportCsv);
+    $('#btnExportBpi').addEventListener('click', exportBpi);
     $('#btnSendTrinity').addEventListener('click', sendToTrinity);
     $('#psPeriod').addEventListener('change', function () {
       var id = this.value;
@@ -3038,7 +3097,7 @@
       if (el.type === 'checkbox') value = el.checked;
       else if (el.dataset.money !== undefined) value = parseAmount(el.value);
       else if (el.type === 'number') value = E.num(el.value);
-      else if (/^\d+$/.test(el.value)) value = parseInt(el.value, 10);
+      else if (el.dataset.text === undefined && /^\d+$/.test(el.value)) value = parseInt(el.value, 10);   // data-text keeps leading zeros
       else value = el.value;
       setPath(state.settings, path, value);
       Store.saveSettings(state.settings);

@@ -47,6 +47,7 @@
         <button class="btn ghost" id="btnClearDtr" type="button">Clear timesheet</button>
         <button class="btn ghost danger" id="btnDeleteCutoffs" type="button">Delete all cutoffs</button>
         <button class="btn ghost" id="btnExportCsv" type="button">Export CSV</button>
+        <button class="btn ghost" id="btnExportBpi" type="button">BPI bank file (.xls)</button>
         <button class="btn ghost" id="btnSendTrinity" type="button" style="display:none">Send to TrinityHR</button>
         <button class="btn ghost" id="btnImportTemplate" type="button">Import payroll files</button>
         <input type="file" id="templateFile" accept=".xlsx,.xls,.csv" multiple style="display:none">
@@ -552,6 +553,8 @@
         <label>Address <input type="text" data-setting="company.address"></label>
         <label>TIN <input type="text" data-setting="company.tin"></label>
         <label>Branch <input type="text" data-setting="company.branch"></label>
+        <label>BPI funding account <input type="text" inputmode="numeric" data-text data-setting="company.bpiFundingAccount"
+          placeholder="Account the payroll is paid from"></label>
       </div>
     </div>
 

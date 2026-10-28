@@ -148,6 +148,11 @@
             row[f] = txt(raw);
           }
         });
+        // BPI accounts are 10 digits; one saved as a number in the sheet has
+        // lost its leading 0.
+        if (/\bbpi\b|philippine island/i.test(row.bankName || '') && /^\d{9}$/.test(row.bankAccountNo || '')) {
+          row.bankAccountNo = '0' + row.bankAccountNo;
+        }
         // A row needs a name or an ID to be anybody.
         if (!row.systemId && !row.hrEmployeeId && !row.firstName && !row.lastName) continue;
         row.line = r + 1;

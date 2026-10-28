@@ -41,6 +41,10 @@ export async function GET(request: Request) {
           net_pay: Number(r.net_pay),
           currency: (r.lines as { currency?: string } | null)?.currency || "PHP",
           code: (r.lines as { employee?: { code?: string } } | null)?.employee?.code ?? "",
+          // The salary line(s), for splitting pay across bank accounts.
+          salary: ((r.lines as { earnings?: { label?: string; amount?: number | null }[] } | null)?.earnings ?? [])
+            .filter((l) => /^(gross )?salary\b/i.test(String(l.label ?? "").trim()))
+            .reduce((t, l) => t + (Number(l.amount) || 0), 0),
         };
       }),
     });

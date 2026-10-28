@@ -48,6 +48,11 @@ export async function GET(request: Request) {
   }
 }
 
+// "Abénojar,  Frances" → "abenojar frances"
+const nameKey = (v: unknown) =>
+  String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z]+/g, " ").trim();
+
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
 const text = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -98,6 +103,17 @@ export async function PUT(request: Request) {
       (users ?? []).filter((u) => u.email).map((u) => [String(u.email).trim().toLowerCase(), u]),
     );
 
+    // Without an email, a payslip goes to the one account whose name matches
+    // exactly; a name two accounts share matches nobody.
+    const byName = new Map<string, (typeof users)[number] | null>();
+    for (const u of users ?? []) {
+      const names = new Set(
+        [u.full_name, `${u.first_name ?? ""} ${u.last_name ?? ""}`, `${u.preferred_name ?? ""} ${u.last_name ?? ""}`]
+          .map(nameKey)
+          .filter((k) => k.includes(" ")),
+      );
+      for (const k of names) byName.set(k, byName.has(k) && byName.get(k)?.id !== u.id ? null : u);
+    }
     const now = new Date().toISOString();
     const unmatched: string[] = [];
     const invalid: string[] = [];
@@ -105,9 +121,10 @@ export async function PUT(request: Request) {
     const slips: StoredPayslip[] = [];
     for (const s of body!.payslips!) {
       const email = text(s.email).toLowerCase();
-      const user = email ? byEmail.get(email) : undefined;
+      const name = text(s.name, 120);
+      const user = email ? byEmail.get(email) : name ? byName.get(nameKey(name)) ?? undefined : undefined;
       if (!user) {
-        unmatched.push(email || "(no email)");
+        unmatched.push(email || name || "(no email)");
         continue;
       }
       const lines = (s.lines ?? {}) as Record<string, unknown>;
@@ -117,7 +134,7 @@ export async function PUT(request: Request) {
       const currency = text(s.currency).toUpperCase();
       if (!earnings || !deductions || gross === null || ded === null || net === null ||
           !/^[A-Z]{3}$/.test(currency) || seen.has(user.id)) {
-        invalid.push(email);
+        invalid.push(email || name);
         continue;
       }
       seen.add(user.id);

@@ -1566,7 +1566,9 @@
         '<td class="num">' + box(emp, 'leave') +
           '<input type="text" inputmode="decimal" data-fp-leave="' + id + '" value="' +
           esc(cfg.leaveDays === undefined || cfg.leaveDays === null ? '' : cfg.leaveDays) + '" placeholder="' +
-          esc(plain(fp.leaveSuggested)) + '" style="width:56px" title="Days to convert; blank = the monetizable days"> days' +
+          esc(plain(fp.leaveSuggested)) + '" style="width:56px" title="Days to convert; blank = the prorated unused days"> days' +
+          '<div class="auto-note">' + plain(fp.leaveCredits) + ' \u00d7 ' + plain(fp.monthsWorked) + '/12 months = ' +
+          plain(fp.leaveEarned) + ' earned, ' + plain(fp.leaveUsed) + ' taken</div>' +
           '<div class="auto-note">' + plain(fp.leaveAmount) + ' at ' + plain(fp.dailyRate) + '/day' +
           (fp.leaveTaxable ? ', ' + plain(fp.leaveTaxable) + ' taxable' : '') + '</div></td>' +
         '<td class="num">' + box(emp, 'tax') + plain(fp.taxAdjustment) +

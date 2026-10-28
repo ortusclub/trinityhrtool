@@ -1155,8 +1155,9 @@
   /**
    * Final pay for someone leaving, paid in the cutoff emp.finalPay.periodId:
    *   13th month   the year's 13th month not yet paid (pro rata, yearEndFor)
-   *   leave        unused leave × daily rate — the monetizable days unless
-   *                typed (leaveDays); tax-free up to finalPay.leaveExemptDays
+   *   leave        unused leave × daily rate: the year's credits prorated to
+   *                the months worked, less the leave taken — unless typed
+   *                (leaveDays); tax-free up to finalPay.leaveExemptDays
    *   loans        every loan's balance left after that cutoff's instalment
    *   clearance    deductions typed for the clearance (laptop, advances …)
    *   tax          the annual adjustment: tax withheld to date (that cutoff
@@ -1180,8 +1181,10 @@
     var thirteenthTaxable = on('thirteenth') ? ye.thirteenthBalanceTaxable : 0;
 
     var leave = ye.leave, daily = rateSet(emp, settings).daily;
+    var leaveEarned = r2(leave.credits * ye.monthsWorked / 12);
+    var leaveUnused = r2(Math.max(0, leaveEarned - leave.usedThisYear));
     var typed = cfg.leaveDays !== undefined && cfg.leaveDays !== null && cfg.leaveDays !== '';
-    var leaveDays = on('leave') ? r2(Math.max(0, typed ? num(cfg.leaveDays) : leave.monetizableDays)) : 0;
+    var leaveDays = on('leave') ? r2(Math.max(0, typed ? num(cfg.leaveDays) : leaveUnused)) : 0;
     var leaveAmount = r2(leaveDays * daily);
     var exemptDays = num(((settings.finalPay || {}).leaveExemptDays));
     var leaveTaxable = r2(Math.max(0, leaveDays - exemptDays) * daily);
@@ -1208,7 +1211,8 @@
     return {
       period: period,
       thirteenth: thirteenth, thirteenthTaxable: thirteenthTaxable, thirteenthPaid: ye.thirteenthPaid,
-      leaveDays: leaveDays, leaveSuggested: leave.monetizableDays, leaveRemaining: leave.remaining,
+      leaveDays: leaveDays, leaveSuggested: leaveUnused, leaveEarned: leaveEarned, leaveCredits: leave.credits,
+      leaveUsed: leave.usedThisYear, monthsWorked: ye.monthsWorked,
       leaveAmount: leaveAmount, leaveTaxable: leaveTaxable, dailyRate: r2(daily),
       loanRows: loanRows, loanBalance: r2(loanRows.reduce(function (t, l) { return t + l.amount; }, 0)),
       clearance: clearance, clearanceTotal: r2(clearance.reduce(function (t, c) { return t + c.amount; }, 0)),

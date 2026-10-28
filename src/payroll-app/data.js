@@ -59,6 +59,12 @@
 
     // Paid time off. PTO days are PAID, so unlike absences they carry no
     // deduction; they draw down the employee's credits instead.
+    // Final pay: unused leave converted on leaving is tax-free up to this
+    // many days (monetized leave, de minimis); the rest is taxable.
+    finalPay: {
+      leaveExemptDays: 10
+    },
+
     leave: {
       annualCredits: 15,        // default when an employee has none set
       allowNegative: false,     // warn once credits are exhausted

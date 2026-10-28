@@ -698,7 +698,7 @@
   /* ------------------------- BPI bank file (.xls) -------------------------
      BPI BizLink's "Pay BPI Accounts — Lumpsum" upload: an H row with the
      totals and the funding account, a header row, then one D row per
-     person: BPI account, net pay, remarks. Only BPI accounts can go in it,
+     person: BPI account, net pay, remarks, and the name in H. Only BPI accounts can go in it,
      so anyone else is listed after the download to be paid another way. */
   function isBpi(emp) {
     return /\bbpi\b|philippine island/i.test(emp.bankName || '');
@@ -717,7 +717,7 @@
       if (!(net > 0)) return;
       if (!isBpi(emp)) skipped.push(who + ' \u2014 ' + (emp.bankName || 'no bank') + ', ' + peso(net));
       else if (acct.length !== 10) skipped.push(who + ' \u2014 BPI account number is not 10 digits, ' + peso(net));
-      else rows.push({ acct: acct, net: net });
+      else rows.push({ acct: acct, net: net, name: who });
     });
     if (!rows.length) { alert('Nobody on this cutoff has a BPI account and net pay to send.'); return; }
 
@@ -729,7 +729,8 @@
         C1: { t: 'n', v: total, f: 'SUM(C3:C9993)', z: '#,##0.00' },
         D1: str('Total Count:'), E1: { t: 'n', v: rows.length, f: 'COUNTA(C3:C9993)' },
         F1: str('FUNDING ACCOUNT'), G1: str(funding),
-        A2: str('DETAIL CONSTANT'), B2: str('BENEFICIARY ACCOUNT'), C2: str('AMOUNT'), D2: str('REMARKS')
+        A2: str('DETAIL CONSTANT'), B2: str('BENEFICIARY ACCOUNT'), C2: str('AMOUNT'), D2: str('REMARKS'),
+        H2: str('NAME')
       };
       rows.forEach(function (r, i) {
         var n = i + 3;
@@ -737,9 +738,10 @@
         ws['B' + n] = str(r.acct);   // text, so leading zeros stay
         ws['C' + n] = { t: 'n', v: r.net, z: '#,##0.00' };
         ws['D' + n] = str(remarks);
+        ws['H' + n] = str(r.name);   // for checking only; past the columns BizLink reads
       });
-      ws['!ref'] = 'A1:G' + (rows.length + 2);
-      ws['!cols'] = [20.5, 21.8, 20.4, 20.4, 20.4, 20.5, 20.4].map(function (w) { return { wch: w }; });
+      ws['!ref'] = 'A1:H' + (rows.length + 2);
+      ws['!cols'] = [20.5, 21.8, 20.4, 20.4, 20.4, 20.5, 20.4, 30].map(function (w) { return { wch: w }; });
       var wb = XL.utils.book_new();
       XL.utils.book_append_sheet(wb, ws, 'Sheet1');
       var out = XL.write(wb, { bookType: 'biff8', type: 'array' });

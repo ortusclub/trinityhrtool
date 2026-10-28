@@ -2660,9 +2660,11 @@
         return (r && r.initials) || (String(p.code).match(/^[A-Za-z]+/) || [''])[0].toUpperCase() ||
           wiseKey(p.name).split(' ').map(function (w) { return w.charAt(0); }).join('').toUpperCase();
       };
-      var files = {}, missing = [];
+      var files = {}, missing = [], viaBpi = [];
       d.payslips.slice().sort(function (x, y) { return x.name.localeCompare(y.name); }).forEach(function (p) {
-        var r = recipientOf(p);
+        var r = recipientOf(p), emp = roster[(p.email || '').toLowerCase()];
+        // PHP with no Wise recipient but a BPI account is paid through BPI.
+        if (!r && p.currency === 'PHP' && emp && isBpi(emp)) { viaBpi.push(p.name + ', ' + psMoney(p.net_pay, 'PHP')); return; }
         if (!r) missing.push(p.name + ' (' + p.currency + ')');
         var file = p.currency === 'EUR' ? 'EUR' : 'other';
         (files[file] = files[file] || []).push([
@@ -2690,6 +2692,7 @@
         }, i * 600);
       });
       var msg = [curs.map(function (c) { return files[c].length + ' in ' + nameOf(c); }).join(', ') + ' \u2014 one Wise CSV each.'];
+      if (viaBpi.length) msg.push('\nNot in Wise \u2014 PHP to their BPI account (' + viaBpi.length + '):\n  ' + viaBpi.join('\n  '));
       if (missing.length) msg.push('\nNo Wise recipient remembered for these, so their recipientId is blank \u2014 fill it in, ' +
         'or load a Wise CSV that has them (' + missing.length + '):\n  ' + missing.join('\n  '));
       alert(msg.join('\n'));

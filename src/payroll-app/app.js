@@ -2734,7 +2734,7 @@
           given += amt;
         });
         var left = E.r2(net - given);
-        if (rest.length) add(rest[0], rest[0].currency || p.currency, 'target', left);
+        if (rest.length) { if (left > 0) add(rest[0], rest[0].currency || p.currency, 'target', left); }   // nothing extra this month: no row
         else if (left) split.push(p.name + ': ' + psMoney(left, p.currency) + ' beyond the salary has no account for it \u2014 add it to a row');
       });
       // The non-EUR file is named by what's in it, "PHP USD".

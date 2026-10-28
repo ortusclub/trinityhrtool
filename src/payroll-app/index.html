@@ -27,6 +27,7 @@
   <button class="tab" data-tab="yearend" type="button">13th Month &amp; Year-End</button>
   <button class="tab" data-tab="payslip" type="button">Payslip</button>
   <button class="tab" data-tab="settings" type="button">Settings &amp; Rules</button>
+  <button class="tab" data-tab="process" type="button">Notes/Process</button>
 </nav>
 
 <main>
@@ -595,6 +596,88 @@
   </section>
 
   <!-- ==================== SETTINGS ==================== -->
+  <!-- ==================== NOTES / PROCESS ==================== -->
+  <section class="panel hidden" id="tab-process">
+    <div class="card">
+      <div class="card-head"><h2>Trinity payroll (PHP)</h2><p class="hint" style="display:block">Paid every <strong>10th</strong> (cutoff 16th–end of month) and <strong>25th</strong> (cutoff 1st–15th). Everything here saves for all HR admins.</p></div>
+      <div class="process">
+        <h3>New hire</h3>
+        <ol>
+          <li><strong>Employees</strong> tab: re-import the latest <strong>201 File</strong> (start date, work email, BPI account, government numbers), or <strong>+ Add employee</strong>.</li>
+          <li>Give them a <strong>monthly rate</strong>: <strong>Import salaries</strong>, or type it in. Without one they are left off the cutoff and a yellow warning names them.</li>
+          <li>Check they have a <strong>TrinityHR login</strong> (User Management) with the same work email, or their payslip cannot be published to them.</li>
+          <li>Starting mid-cutoff, their basic pay and de minimis are prorated on their own; a blue note says <em>Started inside this cutoff</em>.</li>
+        </ol>
+        <h3>Each cutoff</h3>
+        <ol>
+          <li><strong>Payroll Run</strong>: choose the pay period and year.</li>
+          <li><strong>Download template (.xlsx)</strong> — always a fresh one.</li>
+          <li>Fill in the cream columns: OT and ND hours; quarterly bonus and its <strong>details</strong> (";" between items, shown on the payslip); travel allowance and deductions; absences, late, undertime; Tendo, HMO, <strong>SSS loan</strong>, <strong>Class pass</strong>; other deduction; remarks.</li>
+          <li><strong>Import payroll files</strong> with it (or type straight into the table).</li>
+          <li>Check the cards (gross, contributions, tax, <strong>net pay</strong>, cost to company), that nobody has a negative net pay, and a few people with the <strong>Payslip</strong> button on their row.</li>
+        </ol>
+        <h3>Payslips</h3>
+        <ol>
+          <li><strong>Payslip</strong> tab → Trinity payroll: choose the cutoff, <strong>Prepare payslips</strong>.</li>
+          <li>Preview a few people, then <strong>Publish to employees</strong>. They see it under My Workspace → Payslips. Preparing again replaces the cutoff's payslips.</li>
+        </ol>
+        <h3>BPI bank file</h3>
+        <ol>
+          <li>Once: the <strong>BPI funding account</strong> in Settings &amp; Rules → Company.</li>
+          <li>Payroll Run → <strong>BPI bank file (.xls)</strong>. Everyone with net pay is in it, their name in column H.</li>
+          <li>Read the popup: people not on BPI (e.g. GCash), account numbers that are not 10 digits, no bank on file, negative net pay (not in the file). Pay those separately.</li>
+          <li>Upload in <strong>BPI BizLink</strong> as "Pay BPI Accounts – Lumpsum" and check the total. <strong>Export CSV</strong> keeps a record of the cutoff.</li>
+        </ol>
+        <h3>Resignee</h3>
+        <ol>
+          <li>Set their <strong>last day of work</strong> on the Employees tab (or the next 201 File import brings it).</li>
+          <li>In their last cutoff, basic pay and de minimis are prorated to that day; a blue note says <em>Last day of work inside this cutoff</em>.</li>
+          <li>From the next cutoff they are off the payroll on their own. Their past payslips stay.</li>
+        </ol>
+        <h3>Final pay</h3>
+        <ol>
+          <li><strong>Final Pay</strong> tab: everyone with a last day is listed.</li>
+          <li>Choose <strong>Final pay in</strong> — the cutoff with their last day, or a later one. That cutoff adds: the <strong>13th month</strong> not yet paid (pro rata); <strong>unused leave</strong> (the year's credits × months worked ÷ 12, less leave taken, at the daily rate; type days to override; tax-free up to the days in Settings); the year's <strong>tax adjustment</strong> (refund or tax due); any <strong>loan balance</strong>; <strong>clearance deductions</strong> you add.</li>
+          <li>Untick parts that do not apply; write a <strong>note</strong> if needed. Check <strong>Net pay that cutoff</strong>. A cutoff after the last day pays only the final pay (no basic, no contributions).</li>
+          <li>Run that cutoff as usual — payslip, BPI file. The final pay is part of them.</li>
+          <li>Final pays done in Excel ("Final Pay" tabs): <strong>Record final pay from payroll files</strong> marks them paid.</li>
+          <li>At year-end, anyone given final pay is skipped for the 13th month and tax refund.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Non-Trinity payroll (No-Tax)</h2><p class="hint" style="display:block">Paid once a month through <strong>Wise</strong> (EUR, PHP, USD). Everything is on the <strong>Payslip</strong> tab.</p></div>
+      <div class="process">
+        <h3>New hire</h3>
+        <ol>
+          <li>They need a <strong>TrinityHR login</strong> (User Management) with their work email; set their <strong>country</strong> there — it decides the company on their payslip (Kosovo → Ortus Strategy Kosovo Branch, anyone else → Ortus Strategy Pte Ltd).</li>
+          <li>Add them as a <strong>Wise recipient</strong>: load a Wise bulk CSV with them in it in <strong>Wise bulk payments</strong> (it adds to the 52 already there). Paid into two accounts? Put the same email on both rows and say in the column after receiverType what each gets: "gross salary", "half of gross salary" / "other half of gross salary", "commission and other payments", or "converted".</li>
+          <li>Add their row to the month's payroll file.</li>
+        </ol>
+        <h3>Each month</h3>
+        <ol>
+          <li><strong>Download No-Tax template (.xlsx)</strong> (or use the Payslip Generator CSV); one row per person: employee, email, currency, gross salary, commission and its details, bonus, reimbursement, deduction, payroll period, payout date. Net fills itself in.</li>
+          <li><strong>Upload Non-Trinity payslips</strong>: choose the file, leave the two company fields as they are, <strong>Upload as draft</strong>. Anyone without a matching TrinityHR account is listed.</li>
+          <li><strong>Preview as an employee</strong>: a Kosovo and a non-Kosovo person — company, currency, amounts, reference.</li>
+          <li><strong>Publish</strong> the batch. To correct it later, upload the fixed file with the same payout date: it replaces the batch and stays published.</li>
+        </ol>
+        <h3>Wise payment</h3>
+        <ol>
+          <li><strong>Wise CSV</strong> on the batch: two files, <em>Bulk Uploads – &lt;Month&gt; EUR</em> and <em>… PHP USD</em>. Every row has the recipient ID, "target", net pay and a reference like AG112026 - Salary; split people get one row per account; a "converted" account gets the salary at OANDA's rate for the payout date.</li>
+          <li>Read the popup: the rate used, anyone paid <strong>through BPI</strong> instead (e.g. Roman), anyone with <strong>no Wise recipient</strong> (blank recipientId), any split that did not add up.</li>
+          <li>Upload both CSVs in <strong>Wise</strong> batch payments, check the totals against the batch, fund it.</li>
+          <li>Pay the BPI people in <strong>BizLink</strong> by hand with the amounts shown.</li>
+        </ol>
+        <h3>Resignee</h3>
+        <ol>
+          <li>Leave them out of the next month's payroll file — that is all it takes; their past payslips stay.</li>
+          <li>Their last month: put any final amounts in their row (e.g. a bonus or deduction with its description).</li>
+          <li>Deactivate their TrinityHR login when they go; published payslips are kept.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
   <section class="panel hidden" id="tab-settings">
 
     <div class="card">

@@ -3321,7 +3321,7 @@
      ===================================================================== */
   function switchTab(name) {
     $$('#tabs .tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
-    ['run', 'finalpay', 'employees', 'holidays', 'yearend', 'payslip', 'settings'].forEach(function (n) {
+    ['run', 'finalpay', 'employees', 'holidays', 'yearend', 'payslip', 'settings', 'process'].forEach(function (n) {
       $('#tab-' + n).classList.toggle('hidden', n !== name);
     });
     if (name === 'finalpay') renderFinalPay();

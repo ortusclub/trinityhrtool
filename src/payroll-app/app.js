@@ -2592,8 +2592,9 @@
      column after receiverType sets that up: rows with the same email are
      one person's accounts, and each note says what that account gets —
      "gross salary", "half of gross salary" / "other half", "commission and
-     other payments" (what's left of net pay), or the salary "converted"
-     (sent as the source currency, so Wise converts it). */
+     other payments" (what's left of net pay; with no such account, the
+     first half account gets it), or the salary "converted" (sent as the
+     source currency, so Wise converts it). */
   var WISE_HEAD = ['recipientId', 'name', 'recipientEmail', 'recipientDetail', 'sourceCurrency', 'targetCurrency',
     'amountCurrency', 'amount', 'paymentReference', 'referenceNumber', 'receiverType'];
   function wiseKey(v) {
@@ -2718,24 +2719,26 @@
           add(parts ? parts[0] : r, p.currency, 'target', net);
           return;
         }
-        // The salary parts first, then whatever is left of net pay.
-        var halves = 0, given = 0, rest = [];
+        // The salary parts first, then whatever is left of net pay: to the
+        // "commission and other payments" account, else the first half account.
+        var halves = 0, given = 0, out = [], restAt = -1, firstHalf = -1;
         parts.forEach(function (a) {
-          var amt;
+          var amt, cur = 'target';
           if (a.part === 'salary') amt = salary;
-          else if (a.part === 'half') amt = halves++ ? E.r2(salary - E.r2(salary / 2)) : E.r2(salary / 2);   // the second takes the odd cent
-          else if (a.part === 'salarySource') {
-            if (p.currency !== source) { split.push(p.name + ': can\u2019t send the ' + p.currency + ' salary as ' + source + '; check ' + a.name + '\u2019s row'); }
-            add(a, a.currency || p.currency, 'source', salary);
-            given += salary;
-            return;
-          } else { rest.push(a); return; }
-          add(a, a.currency || p.currency, 'target', amt);
+          else if (a.part === 'half') {
+            if (firstHalf === -1) firstHalf = out.length;
+            amt = halves++ ? E.r2(salary - E.r2(salary / 2)) : E.r2(salary / 2);   // the second takes the odd cent
+          } else if (a.part === 'salarySource') {
+            if (p.currency !== source) split.push(p.name + ': can\u2019t send the ' + p.currency + ' salary as ' + source + '; check ' + a.name + '\u2019s row');
+            amt = salary; cur = 'source';
+          } else { if (restAt === -1) restAt = out.length; amt = 0; }
+          out.push({ a: a, cur: cur, amt: amt });
           given += amt;
         });
-        var left = E.r2(net - given);
-        if (rest.length) { if (left > 0) add(rest[0], rest[0].currency || p.currency, 'target', left); }   // nothing extra this month: no row
+        var left = E.r2(net - given), to = restAt !== -1 ? restAt : firstHalf;
+        if (left && to !== -1) out[to].amt = E.r2(out[to].amt + left);
         else if (left) split.push(p.name + ': ' + psMoney(left, p.currency) + ' beyond the salary has no account for it \u2014 add it to a row');
+        out.forEach(function (o) { if (o.amt > 0) add(o.a, o.a.currency || p.currency, o.cur, o.amt); });   // nothing to pay: no row
       });
       // The non-EUR file is named by what's in it, "PHP USD".
       var nameOf = function (f) {

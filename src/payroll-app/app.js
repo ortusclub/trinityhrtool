@@ -1631,8 +1631,15 @@
           var emp = state.employees.filter(function (e) { return p.id && String(e.id).trim() === p.id; })[0] ||
             state.employees.filter(function (e) { return key(e.firstName + ' ' + e.lastName) === key(p.name); })[0];
           if (!emp) { missing.push(p.name + ' (' + (p.id || 'no ID') + ', ' + x.file.name + ')'); return; }
-          // A person in two files: the one that paid the 13th month or a refund is the final pay.
+          /* A person in two files: the cutoff that paid the 13th month or a refund
+             is the final pay — by its imported register when there is one,
+             which is what was paid, else by the tab. */
           var weight = Math.abs(p.thirteenth) + Math.abs(p.taxRefund);
+          var posted = state.dtr[period.id + '|' + emp.id];
+          if (posted && posted.posted) {
+            var slip = E.computePayslip(emp, period, posted, state.settings, null);
+            weight = Math.abs(slip.earnings.thirteenthMonth) + Math.abs(slip.postTax.taxRefund);
+          }
           if (seen[emp.id] && seen[emp.id].weight >= weight) {
             problems.push(p.name + ': also in ' + x.file.name + ' \u2014 kept ' + seen[emp.id].file);
             return;

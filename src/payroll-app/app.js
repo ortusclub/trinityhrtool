@@ -2971,7 +2971,9 @@
     btn.disabled = true; btn.textContent = 'Uploading…';
     psApi('payslips', 'PUT', {
       batch: { id: up.id, label: up.label, payout_date: up.payout, cutoff_start: up.start, cutoff_end: up.end },
-      payslips: up.payslips
+      payslips: up.payslips,
+      // TrinityHR picks each payslip's company from the person's country.
+      company_by_country: { kosovo: $('#upCompany').value.trim(), other: $('#upCompanyOther').value.trim() }
     }).then(function (r) {
       var missed = r.unmatched.concat(r.invalid).map(function (e) { return (names[e] || e) + ' — ' + e; });
       psShowMissed($('#upUnmatched'), missed);
@@ -3138,7 +3140,7 @@
     $('#psEmployee').addEventListener('change', psPreview);
     $('#upFile').addEventListener('change', upRead);
     $('#wiseFile').addEventListener('change', wiseLoad);
-    ['#upCompany', '#upAddress', '#upCurrency'].forEach(function (id) { $(id).addEventListener('change', upRead); });
+    ['#upCompany', '#upCompanyOther', '#upAddress', '#upCurrency'].forEach(function (id) { $(id).addEventListener('change', upRead); });
     $('#upSave').addEventListener('click', upSave);
     $('#upTplNoTax').addEventListener('click', function () { downloadPayslipTemplate('notax'); });
     $('#upTplXk').addEventListener('click', function () { downloadPayslipTemplate('xk'); });

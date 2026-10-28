@@ -84,6 +84,8 @@ export async function PUT(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     batch?: { id?: string; label?: string; payout_date?: string; cutoff_start?: string; cutoff_end?: string };
     payslips?: Record<string, unknown>[];
+    // Company on each payslip by the person's country instead of the file's one.
+    company_by_country?: { kosovo?: string; other?: string };
   } | null;
   const b = body?.batch;
   if (
@@ -102,7 +104,7 @@ export async function PUT(request: Request) {
     const db = await createClient();
     const { data: users, error } = await db
       .from("users")
-      .select("id, email, full_name, preferred_name, first_name, last_name");
+      .select("id, email, full_name, preferred_name, first_name, last_name, holiday_country");
     if (error) throw error;
     const byEmail = new Map(
       (users ?? []).filter((u) => u.email).map((u) => [String(u.email).trim().toLowerCase(), u]),
@@ -119,6 +121,8 @@ export async function PUT(request: Request) {
       );
       for (const k of names) byName.set(k, byName.has(k) && byName.get(k)?.id !== u.id ? null : u);
     }
+    const cbc = body!.company_by_country;
+    const byCountry = cbc ? { kosovo: text(cbc.kosovo), other: text(cbc.other) } : null;
     const now = new Date().toISOString();
     const unmatched: string[] = [];
     const invalid: string[] = [];
@@ -161,7 +165,11 @@ export async function PUT(request: Request) {
           earnings,
           deductions,
           net_taxable: num(lines.net_taxable),
-          company: { name: text(company.name), address: text(company.address), tin: text(company.tin, 40) },
+          company: {
+            name: byCountry ? (user.holiday_country === "XK" ? byCountry.kosovo : byCountry.other) || text(company.name) : text(company.name),
+            address: text(company.address),
+            tin: text(company.tin, 40),
+          },
           employee: {
             code: text(employee.code, 40),
             position: text(employee.position, 120),

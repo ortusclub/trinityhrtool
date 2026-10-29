@@ -781,12 +781,64 @@
   /* =====================================================================
      TEMPLATE — download and re-import
      ===================================================================== */
+  /* The template comes with OT and ND hours from TrinityHR filled in:
+     approved overtime requests in the cutoff (REGULAR OVERTIME, workdays
+     only) and night-differential hours of scheduled night shifts worked
+     plus the night part of the overtime (NIGHT DIFFERENTIAL HOURS). Only
+     where the cutoff has none yet — what an imported file set stays.
+     Overtime on a rest day or holiday is not at the 1.25 rate, so it is
+     left out and named in Remarks to be checked. The import then records
+     them, as with any other column. */
   function downloadTemplate() {
-    var blob = window.PayrollTemplate.build(
-      state.runEmployees, state.period, state.dtr, state.settings, state.run);
-    var name = 'Payroll Template — ' + state.settings.company.name + ' — ' +
-      state.period.id + '.xlsx';
-    window.XlsxWriter.download(blob, name.replace(/[\\/:*?"<>|]/g, '-'));
+    var btn = $('#btnDownloadTemplate'), note = $('#otNdNotice'), period = state.period;
+    btn.disabled = true;
+    psApi('ot-nd?from=' + period.start + '&to=' + period.end).then(function (data) {
+      var byEmail = {};
+      (data.people || []).forEach(function (p) { byEmail[p.email] = p; });
+      var holiday = {};
+      E.holidaysInPeriod(period, state.holidays, state.settings).forEach(function (h) { holiday[h.date] = h.name; });
+      var wd = state.settings.schedule.workDays;
+      var dtr = Object.assign({}, state.dtr), filled = 0, flagged = [];
+      state.runEmployees.forEach(function (emp) {
+        var p = byEmail[String(emp.email || '').trim().toLowerCase()];
+        if (!p) return;
+        var key = period.id + '|' + emp.id, d = Object.assign({}, dtr[key] || {});
+        if (d.posted) return;
+        var ot = 0, nd = p.scheduledNd, odd = [];
+        p.ot.forEach(function (o) {
+          nd += o.ndHours;
+          var day = E.parseYmd(o.date), why = holiday[o.date] || (wd.indexOf(day.getDay()) === -1 ? 'rest day' : '');
+          if (why) odd.push(E.fmtShort(day) + ' ' + o.hours + 'h (' + why + ')');
+          else ot += o.hours;
+        });
+        var set = false;
+        if (!E.num(d.otHours) && ot) { d.otHours = E.r2(ot); set = true; }
+        if (!E.num(d.ndHours) && nd) { d.ndHours = E.r2(nd); set = true; }
+        if (odd.length) {
+          d.remarks = (d.remarks ? d.remarks + '; ' : '') + 'OT to check: ' + odd.join(', ');
+          flagged.push(emp.lastName + ', ' + emp.firstName + ' — ' + odd.join(', '));
+          set = true;
+        }
+        if (set) { dtr[key] = d; filled++; }
+      });
+      var run = E.computeRun(state.runEmployees, period, dtr, state.settings);
+      note.innerHTML = '<div class="notice" style="margin-bottom:12px">OT and ND hours from TrinityHR filled in the template for ' +
+        filled + ' employee(s) — approved overtime requests and scheduled night shifts, ' +
+        esc(E.fmtShort(E.parseYmd(period.start))) + ' – ' + esc(E.fmtShort(E.parseYmd(period.end))) + '.' +
+        (flagged.length ? '<br>Overtime on a rest day or holiday, left out and noted in Remarks: ' +
+          flagged.map(esc).join('; ') : '') + '</div>';
+      save(dtr, run);
+    }).catch(function (e) {
+      note.innerHTML = '<div class="notice warn" style="margin-bottom:12px">Could not read OT and ND from TrinityHR (' +
+        esc(e.message) + ') — the template has the hours already in this cutoff only.</div>';
+      save(state.dtr, state.run);
+    });
+    function save(dtr, run) {
+      btn.disabled = false;
+      var blob = window.PayrollTemplate.build(state.runEmployees, period, dtr, state.settings, run);
+      var name = 'Payroll Template — ' + state.settings.company.name + ' — ' + period.id + '.xlsx';
+      window.XlsxWriter.download(blob, name.replace(/[\\/:*?"<>|]/g, '-'));
+    }
   }
 
   /** The cutoff that opens on `start` (YYYY-MM-DD), from any nearby year. */

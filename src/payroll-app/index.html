@@ -606,8 +606,9 @@
           <p class="hint" style="display:block">
             Certificate of Compensation Payment / Tax Withheld for each employee on this payroll in the year
             (change the year on Payroll Run). Figures are the cutoffs paid in the year plus the year's 13th month
-            and benefits, as on the 13th Month &amp; Year-End tab, so Taxable (item 50) is the annual taxable income
-            and Tax due (item 24) the annual tax. Click a name for the certificate to print; the export has every
+            and benefits, as on the 13th Month &amp; Year-End tab, so Taxable (item 52) is the annual taxable income
+            and Tax due (item 24) the annual tax; 25A on the form is the tax withheld as adjusted at year-end.
+            The certificate follows BIR Form 2316, September 2021 (ENCS). Click a name for the certificate to print; the export has every
             item for everyone. The 13th month and tax refund are included as due for the year, whether or not
             they have been posted yet.
           </p>
@@ -618,8 +619,8 @@
         <table class="grid compact">
           <thead><tr>
             <th>Employee</th><th>TIN</th><th>Period</th>
-            <th class="num">Gross (19)</th><th class="num">Non-taxable (36)</th><th class="num">Taxable (50)</th>
-            <th class="num">Tax due (24)</th><th class="num">Withheld (25A)</th><th class="num">Refund / (due)</th>
+            <th class="num">Gross (19)</th><th class="num">Non-taxable (38)</th><th class="num">Taxable (52)</th>
+            <th class="num">Tax due (24)</th><th class="num">Withheld so far</th><th class="num">Refund / (due)</th>
           </tr></thead>
           <tbody id="birBody"></tbody>
         </table>
@@ -758,6 +759,7 @@
       <div class="form-grid">
         <label>Company name <input type="text" data-setting="company.name"></label>
         <label>Address <input type="text" data-setting="company.address"></label>
+        <label>ZIP code <input type="text" inputmode="numeric" data-text data-setting="company.zip"></label>
         <label>TIN <input type="text" data-setting="company.tin"></label>
         <label>Branch <input type="text" data-setting="company.branch"></label>
         <label>Final pay: unused leave tax-free up to (days) <input type="number" step="1" data-setting="finalPay.leaveExemptDays"></label>

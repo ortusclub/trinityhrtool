@@ -1208,6 +1208,8 @@
       var d = (dtrMap || {})[p.id + '|' + emp.id];
       if (!(d && d.posted) && staffDays(emp, p, settings).onStaff === 0) return;
       if (!(d && d.posted) && isPostedPeriod(dtrMap, p.id)) return;
+      // Not in a payroll file and no rate here: not on this payroll.
+      if (!(d && d.posted) && !(num(withCarriedRate(emp, p, dtrMap).monthlyRate) > 0)) return;
       var slip = computePayslip(withCarriedRate(emp, p, dtrMap), p, d, settings, null);
       if (!slip.earnings.grossPay) return;
       var e = slip.earnings;

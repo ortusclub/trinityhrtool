@@ -503,6 +503,7 @@
     var dmAuto = deMinimisFor(emp, period, settings);
     var deMinimis = dmAuto.amount;
     var quarterlyBonus = num(dtr.quarterlyBonus);
+    var commission = num(dtr.commission);
 
     /* 13th month pay — posted only on the payout it is scheduled for. It is
        tax-exempt up to the statutory ceiling; anything above is taxable. */
@@ -553,7 +554,7 @@
 
     /* ----------------------- GROSS PAY (col T) ------------------------- */
     var grossPay = r2(regularPay + otPay + ndPay + restDayPay + holidayPay +
-      deMinimis + quarterlyBonus + transportationAllowance + thirteenthMonth +
+      deMinimis + quarterlyBonus + commission + transportationAllowance + thirteenthMonth +
       items.totalTaxableAllowance + items.totalNonTaxAllowance);
 
     /* ------------- statutory contributions (cols U, V, W) -------------- */
@@ -665,6 +666,7 @@
         thirteenthTaxable: thirteenthTaxable,
         quarterlyBonus: quarterlyBonus,
         quarterlyBonusDetails: dtr.bonusDetails || '',
+        commission: commission,
         transportationAllowance: transportationAllowance,
         taxableAllowances: items.taxableAllowances,
         nonTaxAllowances: items.nonTaxAllowances,
@@ -754,6 +756,7 @@
     e.deMinimisProrated = false;
     e.quarterlyBonus = v('quarterlyBonus');
     e.quarterlyBonusDetails = P.bonusDetails || '';
+    e.commission = v('commission');
     e.transportationGiven = v('travel');
     e.travelDeduction = a('travelDeduction');
     e.transportationAllowance = r2(e.transportationGiven - e.travelDeduction);
@@ -778,7 +781,7 @@
        basic less absences, late, undertime and start/end proration, plus any
        basic or salary adjustment (back pay of basic). */
     e.regularPay = e.basicPay = P.regularPay === undefined
-      ? r2(e.grossPay - e.otPay - e.ndPay - e.deMinimis - e.quarterlyBonus -
+      ? r2(e.grossPay - e.otPay - e.ndPay - e.deMinimis - e.quarterlyBonus - e.commission -
           e.transportationAllowance - e.holidayPay - e.thirteenthMonth - e.totalTaxableAllowance -
           e.totalNonTaxAllowance)
       : r2(v('regularPay') - e.absenceDeduction - e.lateDeduction - e.undertimeDeduction -
@@ -812,7 +815,7 @@
        here — a figure typed over a formula, a column this layout lacks. The
        payslip prints it as one line so it lands on the net actually paid. */
     e.postedGrossAdjustment = P.regularPay === undefined ? 0 : r2(e.grossPay - (slip.rates.semiMonthly +
-      e.otPay + e.ndPay + e.deMinimis + e.quarterlyBonus + e.transportationAllowance +
+      e.otPay + e.ndPay + e.deMinimis + e.quarterlyBonus + e.commission + e.transportationAllowance +
       e.holidayPay + e.thirteenthMonth + e.totalTaxableAllowance + e.totalNonTaxAllowance - e.absenceDeduction -
       e.lateDeduction - e.undertimeDeduction - e.prorationDeduction));
     slip.postedNetAdjustment = r2(slip.totals.netPay - (e.grossPay - c.mandatoriesApplied -
@@ -977,10 +980,10 @@
    * Year-to-date figures. Tax follows the money: cutoffs PAID in `year`.
    * 13th month follows the work: basic earned in cutoffs WORKED in `year`
    * (January 1 to December 31), with the 13th month already paid, the
-   * company bonus and transport that share its exempt ceiling.
+   * company bonus and quarterly bonus that share its exempt ceiling.
    */
   function yearToDate(emp, year, dtrMap, settings, uptoPayoutDate) {
-    var basic = 0, taxable = 0, withheld = 0, gross = 0, periods = 0, paid13 = 0, paid13Taxable = 0, bonus = 0, transport = 0, dm = 0, halves = 0;
+    var basic = 0, taxable = 0, withheld = 0, gross = 0, periods = 0, paid13 = 0, paid13Taxable = 0, bonus = 0, transport = 0, dm = 0, halves = 0, qb = 0;
     var seen = {};
     periodsOfYear(year).concat(cutoffsOfYear(year)).forEach(function (p) {
       if (seen[p.id]) return;
@@ -997,6 +1000,7 @@
         taxable += slip.tax.taxableIncome;
         withheld += slip.tax.withholding;
         gross += slip.earnings.grossPay;
+        qb += slip.earnings.quarterlyBonus || 0;
         periods++;
       }
       if (parseInt(p.start.slice(0, 4), 10) === year) {
@@ -1013,6 +1017,7 @@
       basicEarned: r2(basic), taxableIncome: r2(taxable),
       taxWithheld: r2(withheld), grossPay: r2(gross), periods: periods,
       thirteenthPaid: r2(paid13), thirteenthTaxedPaid: r2(paid13Taxable), companyBonus: r2(bonus), transport: r2(transport), deMinimis: r2(dm),
+      quarterlyBonus: r2(qb),
       monthsWorked: Math.min(12, Math.round(halves / 2 * 100) / 100)
     };
   }
@@ -1076,6 +1081,7 @@
       row.paid13 = e.thirteenthMonth;
       row.bonus = e.companyBonus || 0;
       row.transport = e.transportationAllowance || 0;
+      row.quarterlyBonus = e.quarterlyBonus || 0;
       row.deMinimis = e.deMinimis || 0;
       rows.push(row);
     });
@@ -1111,25 +1117,24 @@
     var ye = settings.yearEnd;
     var ytd = yearToDate(emp, year, dtrMap, settings, null);
     var thirteenth = r2(ytd.basicEarned / (ye.thirteenthMonthDivisor || 12));
-    /* 13th month, transportation allowance and the company bonus (ex
-       milestones) share one yearly exempt ceiling — the company's rule
-       (Japheth, 23 Oct 2026). Transport and the bonus go untaxed in each
-       cutoff, so whatever the three together pass the ceiling by is taken
-       off the 13th month: that much of it is taxable. Only if the excess is
-       larger than the 13th month itself does the rest come from the others. */
-    var benefits = r2(thirteenth + ytd.companyBonus + ytd.transport);
-    /* The year-end non-taxable bonus is paid with the 13th month: the full
-       amount for a full year, pro rata by months worked otherwise. It is
-       outside the ceiling and never taxed. */
+    /* The 2316 guide (Japheth, 29 Oct 2026), item 34: the 13th month, the
+       anniversary bonus (ex milestones), the quarterly bonus and the
+       year-end bonus — the full amount for a full year, pro rata by months
+       worked otherwise, paid with the 13th month — share the yearly exempt
+       ceiling. Transport is de minimis (item 35), outside it. Whatever they
+       pass the ceiling by is taxable (item 48), taken off the 13th month
+       first. */
     var yearEndBonus = r2(num(ye.yearEndBonus) * ytd.monthsWorked / 12);
+    var benefits = r2(thirteenth + ytd.companyBonus + ytd.quarterlyBonus + yearEndBonus);
     var taxableBenefits = r2(Math.max(0, benefits - ye.thirteenthMonthExemption));
     var taxableThirteenth = r2(Math.min(thirteenth, taxableBenefits));
-    /* Instalments already paid during the year (the payroll files carry
-       them) come off what is still owed. Their taxable part is already in
-       YTD taxable income, so only the rest of the taxable share is added. */
+    /* What YTD taxable income already holds of these: the taxed part of 13th
+       month instalments, and the quarterly bonus, which each cutoff
+       withholds on in full. The rest of the excess is added — or, when the
+       bonus taxed in the cutoffs was within the ceiling, taken back off. */
     var balance = r2(Math.max(0, thirteenth - ytd.thirteenthPaid));
-    var addTaxable = r2(Math.max(0, taxableBenefits - ytd.thirteenthTaxedPaid));
-    var taxableBalance = r2(Math.min(balance, addTaxable));
+    var addTaxable = r2(taxableBenefits - ytd.thirteenthTaxedPaid - ytd.quarterlyBonus);
+    var taxableBalance = r2(Math.min(balance, Math.max(0, addTaxable)));
     /* A previous employer this year (new hire): their taxable pay joins the
        annual income, and the tax they withheld counts toward what is due. */
     var prev = previousEmployer(emp, year);
@@ -1140,6 +1145,7 @@
       ytd: ytd,
       thirteenthMonth: thirteenth,
       companyBonus: ytd.companyBonus,
+      quarterlyBonus: ytd.quarterlyBonus,
       transport: ytd.transport,
       deMinimis: ytd.deMinimis,
       benefits: benefits,
@@ -1149,6 +1155,7 @@
       thirteenthExemptPart: r2(thirteenth - taxableThirteenth),
       thirteenthExempt: r2(benefits - taxableBenefits),
       thirteenthTaxable: taxableBenefits,
+      addTaxable: addTaxable,
       thirteenthPaid: ytd.thirteenthPaid,
       thirteenthBalance: balance,
       thirteenthBalanceTaxable: taxableBalance,
@@ -1213,7 +1220,7 @@
    * annual taxable income the year-end tax is worked out on.
    */
   function bir2316For(emp, year, dtrMap, settings) {
-    var ot = 0, others = 0, mand = 0, worked = [];
+    var ot = 0, others = 0, commission = 0, pto = 0, mand = 0, worked = [];
     var seen = {};
     periodsOfYear(year).forEach(function (p) {
       if (seen[p.id]) return;
@@ -1227,24 +1234,36 @@
       if (!slip.earnings.grossPay) return;
       var e = slip.earnings;
       worked.push(p);
-      ot += (e.otPay || 0) + (e.ndPay || 0) + (e.holidayPay || 0) + (e.restDayPay || 0);
-      others += (e.quarterlyBonus || 0) + (e.taxableAllowances || []).reduce(function (t, a) {
-        return /adjustment/i.test(a.label) ? t : t + a.amount;   // salary adjustments are basic
+      ot += e.otPay || 0;
+      commission += e.commission || 0;
+      others += (e.ndPay || 0) + (e.holidayPay || 0) + (e.restDayPay || 0) +
+        (e.taxableAllowances || []).reduce(function (t, a) {
+          return /adjustment/i.test(a.label) ? t : t + a.amount;   // salary adjustments are basic
+        }, 0);
+      // Paid time off converted to cash (unused leave at final pay).
+      pto += (e.nonTaxAllowances || []).reduce(function (t, a) {
+        return /leave/i.test(a.label) ? t + a.amount : t;
       }, 0);
       mand += slip.contributions.mandatoriesApplied || 0;
     });
     var ye = yearEndFor(emp, year, dtrMap, settings);
     var ytd = ye.ytd;
-    /* Items as the September 2021 (ENCS) form numbers them, filled the way
-       the company's certificates are: transport sits with de minimis (35),
-       34 is the 13th month and other benefits left tax-free, 25A is the tax
-       withheld as adjusted at year-end (= tax due). */
-    var i48 = r2(ye.thirteenthTaxable), i50 = r2(ot), i51a = r2(others);
-    var i39 = r2(ytd.taxableIncome - i50 - i51a - ytd.thirteenthTaxedPaid);
-    var i52 = r2(i39 + i48 + i50 + i51a);
-    var i34 = r2(Math.max(0, ye.thirteenthExempt - ytd.transport));
-    var i35 = r2(ytd.deMinimis + (ye.thirteenthExempt - i34));
-    var i36 = r2(mand), i37 = r2(ye.yearEndBonus);
+    /* Items as the September 2021 (ENCS) form numbers them, filled by the
+       company's 2316 guide (29 Oct 2026):
+         34  13th month, anniversary bonus (ex milestones), quarterly bonus
+             (and the year-end bonus) up to the ceiling
+         35  de minimis, PTO, transport     36  employee contributions
+         37  blank                          39  basic less contributions
+         45  commissions                    48  the excess over the ceiling
+         50  overtime                       51  night differential and holiday pay
+       25A is the tax withheld as adjusted at year-end (= tax due less the
+       previous employer's). */
+    var i45 = r2(commission), i48 = r2(ye.thirteenthTaxable), i50 = r2(ot), i51 = r2(others);
+    var i52 = r2(ye.annualTaxableIncome - ye.previousTaxable);
+    var i39 = r2(i52 - i45 - i48 - i50 - i51);
+    var i34 = r2(ye.thirteenthExempt);
+    var i35 = r2(ytd.deMinimis + ytd.transport + pto);
+    var i36 = r2(mand), i37 = 0;
     var i38 = r2(i34 + i35 + i36 + i37);
     var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };
     var from = year + '-01-01', to = year + '-12-31';
@@ -1254,7 +1273,7 @@
       year: year, periodFrom: from, periodTo: to, cutoffs: worked.length,
       items: {
         i34: i34, i35: i35, i36: i36, i37: i37, i38: i38,
-        i39: i39, i48: i48, i50: i50, i51a: i51a, i52: i52,
+        i39: i39, i45: i45, i48: i48, i50: i50, i51: i51, i52: i52,
         i19: r2(i38 + i52), i20: i38, i21: i52, i22: ye.previousTaxable, i23: r2(i52 + ye.previousTaxable),
         i24: ye.annualTaxDue, i25a: r2(ye.annualTaxDue - ye.previousWithheld), i25b: ye.previousWithheld,
         i26: ye.annualTaxDue, i27: 0, i28: ye.annualTaxDue
@@ -1326,7 +1345,10 @@
 
     var ytd = yearToDate(emp, taxYear, dtrMap, settings, period.payoutDate);
     var prev = previousEmployer(emp, taxYear);
-    var annualTaxable = r2(ytd.taxableIncome + thirteenthTaxable + leaveTaxable + prev.taxable);
+    // The year's benefits over the ceiling (or the quarterly bonus taxed in
+    // the cutoffs that was within it, taken back off) — yearEndFor.
+    var benefitsTaxable = on('thirteenth') ? ye.addTaxable : 0;
+    var annualTaxable = r2(ytd.taxableIncome + benefitsTaxable + leaveTaxable + prev.taxable);
     var due = annualTax(annualTaxable, settings);
     var taxAdjustment = on('tax') ? r2(ytd.taxWithheld + prev.withheld - due) : 0;
 
@@ -1388,7 +1410,7 @@
       totals.thirteenthMonth += s.earnings.thirteenthMonth;
       totals.taxRefund += s.postTax.taxRefund;
       totals.allowances += s.earnings.totalTaxableAllowance + s.earnings.totalNonTaxAllowance +
-        s.earnings.deMinimis + s.earnings.quarterlyBonus + s.earnings.transportationAllowance;
+        s.earnings.deMinimis + s.earnings.quarterlyBonus + (s.earnings.commission || 0) + s.earnings.transportationAllowance;
       totals.grossPay += s.earnings.grossPay;
       totals.sss += s.contributions.sss;
       totals.philhealth += s.contributions.philhealth;

@@ -484,6 +484,7 @@
               e.deMinimisAuto.workDaysTotal + ' days of ' + plain(e.deMinimisAuto.full) + '</div>'
             : '') + '</td>' +
         cellIn('alw', dtrInput(emp, 'quarterlyBonus', false, 92, true) + bonusDetailsInput(emp)) +
+        cellIn('alw', dtrInput(emp, 'commission', false, 92, true)) +
 
         // ---- earnings ----
         '<td class="num' + (e.regularPay ? '' : ' zero') + '">' + plain(e.regularPay) +
@@ -672,7 +673,7 @@
         regularPay: s.rates.semiMonthly, otHours: d.otHours, otPay: e.otPay,
         ndHours: d.ndHours, ndPay: e.ndPay,
         deMinimis: E.r2(e.deMinimis + e.deMinimisDeduction), quarterlyBonus: e.quarterlyBonus,
-        bonusDetails: e.quarterlyBonusDetails || '', sssLoan: p.sssLoan, classPass: p.classPass,
+        bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, sssLoan: p.sssLoan, classPass: p.classPass,
         travel: e.transportationGiven, absentDays: d.absentDays + d.unpaidLeaveDays,
         absenceDeduction: e.absenceDeduction, lateMinutes: d.lateMinutes,
         lateDeduction: e.lateDeduction, undertimeMinutes: d.undertimeMinutes,
@@ -1323,6 +1324,7 @@
         if (t.trim()) add(earn, t.trim(), null, 'sub');
       });
     }
+    if (e.commission) add(earn, 'Commission', e.commission);
     if (e.thirteenthMonth) add(earn, slip.finalPay ? '13th Month Pay (pro rata, final pay)' : '13th Month Pay', e.thirteenthMonth);
     if (e.deMinimis) add(earn, 'De Minimis', e.deMinimis);
     if (slip.posted && e.holidayPay) add(earn, 'Holiday / Rest Day Pay', e.holidayPay);
@@ -1747,15 +1749,16 @@
     ['26', 'Total Amount of Taxes Withheld as adjusted', 'i26'],
     ['27', '5% Tax Credit (PERA Act of 2008)', 'i27'],
     ['28', 'Total Taxes Withheld', 'i28'],
-    ['34', '13th Month Pay and Other Benefits (maximum of P90,000)', 'i34'],
-    ['35', 'De Minimis Benefits', 'i35'],
+    ['34', '13th Month Pay and Other Benefits (maximum of P90,000) — 13th month, anniversary and quarterly bonus', 'i34'],
+    ['35', 'De Minimis Benefits — de minimis, PTO, transportation allowance', 'i35'],
     ['36', 'SSS, GSIS, PHIC & PAG-IBIG Contributions and Union Dues (Employee share only)', 'i36'],
     ['37', 'Salaries and Other Forms of Compensation', 'i37'],
     ['38', 'Total Non-Taxable/Exempt Compensation Income', 'i38'],
-    ['39', 'Basic Salary', 'i39'],
-    ['48', 'Taxable 13th Month Benefits', 'i48'],
+    ['39', 'Basic Salary — basic pay less contributions', 'i39'],
+    ['45', 'Commission', 'i45'],
+    ['48', 'Taxable 13th Month Benefits — excess of 90K', 'i48'],
     ['50', 'Overtime Pay', 'i50'],
-    ['51A', 'Other Taxable Income', 'i51a'],
+    ['51', 'Others — night differential and holiday pay', 'i51'],
     ['52', 'Total Taxable Compensation Income', 'i52']
   ];
 
@@ -1804,7 +1807,7 @@
         '<td' + (tin.length === 4 ? '' : ' class="warn"') + '>' + esc(tin.length === 4 ? tin.join('-') : (x.emp.tin || 'none') + ' — check') + '</td>' +
         '<td>' + esc(b.rdo || '') + '</td>' +
         '<td>' + esc(b.address || '') + '</td><td>' + esc(b.zip || '') + '</td><td>' + esc(b.birthDate || '') + '</td>' +
-        ['i19', 'i24', 'i25a', 'i34', 'i35', 'i36', 'i37', 'i38', 'i39', 'i48', 'i50', 'i51a', 'i52'].map(function (k) { return money(it[k]); }).join('') +
+        ['i19', 'i24', 'i25a', 'i34', 'i35', 'i36', 'i37', 'i38', 'i39', 'i45', 'i48', 'i50', 'i51', 'i52'].map(function (k) { return money(it[k]); }).join('') +
         money(x.f.withheld) +
         '<td class="num' + (adj < 0 ? ' warn' : '') + '">' + (adj < 0 ? '(' + plain(-adj) + ')' : plain(adj)) + '</td></tr>';
     }).join('') : '<tr><td colspan="23" class="muted" style="padding:18px">Nobody was paid in ' + state.year + '.</td></tr>';
@@ -1876,10 +1879,11 @@
       group('Part IV-B — Details of compensation income and tax withheld from present employer') +
       tr('29–33', 'Minimum wage earner items', '<span style="float:right">-</span>') +
       ['34', '35', '36', '37', '38', '39'].map(function (n) { return row(item(n)); }).join('') +
-      tr('40–47', 'Representation, transportation, COLA, housing, others, commission, profit sharing, fees', '<span style="float:right">-</span>') +
+      tr('40–44', 'Representation, transportation, COLA, housing, others', '<span style="float:right">-</span>') +
+      row(item('45')) +
+      tr('46–47', 'Profit sharing, fees including director’s fees', '<span style="float:right">-</span>') +
       row(item('48')) + tr('49', 'Hazard Pay', '<span style="float:right">-</span>') +
-      ['50', '51A'].map(function (n) { return row(item(n)); }).join('') +
-      tr('51B', 'Others', '<span style="float:right">-</span>') + row(item('52')) +
+      ['50', '51'].map(function (n) { return row(item(n)); }).join('') + row(item('52')) +
       '<tr><td colspan="3" class="muted" style="font-size:11.5px">Tax withheld through the cutoffs: ' + plain(f.withheld) + '; year-end ' +
         (f.adjustment >= 0 ? 'refund ' + plain(f.adjustment) : 'tax still due ' + plain(-f.adjustment)) +
         '; 25A is the tax withheld as adjusted.</td></tr></tbody></table>';
@@ -2585,7 +2589,7 @@
         '<td class="num">' + plain(r.accrued) + '</td>' +
         '<td class="num">' + plain(r.running) + '</td>' +
         '<td class="num muted">' + (r.notCounted ? plain(r.notCounted) : '') + '</td>' +
-        money(r.paid13) + money(r.transport) + money(r.bonus) +
+        money(r.paid13) + money(r.quarterlyBonus) + money(r.bonus) +
         '</tr>';
     }).join('');
 
@@ -2614,7 +2618,7 @@
         '<th class="num" title="Basic / salary adjustments">Adjustments</th><th class="num" title="Basic before absences, late and undertime">Gross basic</th>' +
         '<th class="num">13th month (÷ ' + det.divisor + ')</th><th class="num">Running total</th>' +
         '<th class="num" title="Absences, late and undertime in the cutoff — not taken off the 13th month">Absences / late (not counted)</th>' +
-        '<th class="num">13th paid</th><th class="num">Transport allow.</th><th class="num">Ex milestones</th></tr></thead>' +
+        '<th class="num">13th paid</th><th class="num">Quarterly bonus</th><th class="num">Ex milestones</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +
         '<tfoot><tr><td colspan="3">TOTAL — ' + inc.length + ' cutoff' + (inc.length === 1 ? '' : 's') + '</td>' +
           '<td class="num">' + plain(sumOf('basic')) + '</td><td class="num">' + (sumOf('offStaff') ? '−' : '') + plain(sumOf('offStaff')) + '</td>' +
@@ -2622,7 +2626,7 @@
           '<td class="num">' + plain(y.thirteenthMonth) + '</td><td class="num">' + plain(y.thirteenthMonth) + '</td>' +
           '<td class="num muted">' + plain(sumOf('notCounted')) + '</td>' +
           '<td class="num">' + plain(y.thirteenthPaid) + '</td>' +
-          '<td class="num">' + plain(y.transport) + '</td>' +
+          '<td class="num">' + plain(y.quarterlyBonus) + '</td>' +
           '<td class="num">' + plain(y.companyBonus) + '</td></tr></tfoot>' +
       '</table></div>' +
       '<h3 style="margin:18px 0 6px">How it adds up</h3>' +
@@ -2636,9 +2640,10 @@
         line('Year-end non-taxable bonus: ' + plain(state.settings.yearEnd.yearEndBonus) + ' × ' + y.monthsWorked +
           ' month' + (y.monthsWorked === 1 ? '' : 's') + ' worked ÷ 12', plain(y.yearEndBonus)) +
         line('<strong>Expected at the 13th month payout</strong>', '<strong>' + plain(E.r2(y.thirteenthBalance + y.yearEndBonus)) + '</strong>', 'net') +
-        line('<em>Exempt ceiling — shared (the year-end bonus is outside it)</em>', '') +
-        line('Transportation allowance this year', plain(y.transport)) +
-        line('Ex milestones (company bonus) this year', plain(y.companyBonus)) +
+        line('<em>Exempt ceiling — shared (BIR 2316 item 34; transport is de minimis, outside it)</em>', '') +
+        line('Quarterly bonus this year (taxed in the cutoffs)', plain(y.quarterlyBonus)) +
+        line('Ex milestones (anniversary bonus) this year', plain(y.companyBonus)) +
+        line('Year-end bonus', plain(y.yearEndBonus)) +
         line('13th month', plain(y.thirteenthMonth)) +
         line('Total', plain(y.benefits), 'strong') +
         line('Less the ceiling', '−' + plain(ceiling)) +
@@ -2648,7 +2653,9 @@
         line('13th month, taxable (the excess)', plain(y.thirteenthTaxablePart)) +
         (y.thirteenthTaxable > y.thirteenthTaxablePart
           ? line('Excess beyond the 13th month itself, also taxable', plain(E.r2(y.thirteenthTaxable - y.thirteenthTaxablePart))) : '') +
-        line('Added to annual taxable income', plain(y.thirteenthTaxable)) +
+        (y.quarterlyBonus ? line('Less the quarterly bonus already taxed in the cutoffs', '−' + plain(y.quarterlyBonus)) : '') +
+        (y.ytd.thirteenthTaxedPaid ? line('Less 13th month already taxed in the cutoffs', '−' + plain(y.ytd.thirteenthTaxedPaid)) : '') +
+        line('Added to annual taxable income', (y.addTaxable < 0 ? '−' : '') + plain(Math.abs(y.addTaxable)), 'strong') +
       '</tbody></table>' +
       '<p class="hint" style="display:block;margin-top:10px">The 13th month counts the cutoffs worked from January 1 to ' +
         'December 31, ' + state.year + ', by their dates — December 16 - 31 is paid the next January 10 but belongs to this year. ' +
@@ -2717,7 +2724,7 @@
       var y = c.ye;
       sum.basic += y.ytd.basicEarned; sum.thirteenth += y.thirteenthMonth;
       sum.paid13 += y.thirteenthPaid; sum.balance13 += y.thirteenthBalance; sum.bonus += y.companyBonus;
-      sum.transport += y.transport; sum.dm += y.yearEndBonus;
+      sum.transport += y.quarterlyBonus; sum.dm += y.yearEndBonus;
       sum.exempt += y.thirteenthExempt; sum.taxable += y.thirteenthTaxable;
       sum.ytdTaxable += y.ytd.taxableIncome; sum.annualTaxable += y.annualTaxableIncome;
       sum.due += y.annualTaxDue; sum.withheld += y.taxWithheld; sum.adj += y.adjustment;
@@ -2732,7 +2739,7 @@
         money(y.thirteenthPaid) +
         '<td class="num strong">' + plain(y.thirteenthBalance) + '</td>' +
         money(y.yearEndBonus) +
-        money(y.transport) +
+        money(y.quarterlyBonus) +
         money(y.companyBonus) +
         money(y.thirteenthExempt) + money(y.thirteenthTaxable) +
         '<td class="num">' + plain(y.ytd.taxableIncome) + '</td>' +
@@ -2766,8 +2773,8 @@
       stat('13th month still to pay', peso(E.r2(sum.balance13)), peso(E.r2(sum.thirteenth)) + ' for the year − ' +
         peso(E.r2(sum.paid13)) + ' already paid', 'accent'),
       stat('Tax-exempt portion', peso(E.r2(sum.exempt)),
-        '13th month + transport + ex milestones, ceiling ' + peso(state.settings.yearEnd.thirteenthMonthExemption) + ' each'),
-      stat('Taxable portion', peso(E.r2(sum.taxable)), 'added to annual taxable income'),
+        '13th month + year-end, quarterly and anniversary bonus, ceiling ' + peso(state.settings.yearEnd.thirteenthMonthExemption) + ' each'),
+      stat('Taxable portion', peso(E.r2(sum.taxable)), 'over the ceiling — BIR 2316 item 48'),
       stat('Net tax adjustment', peso(E.r2(sum.adj)), refunds + ' refundable \u00b7 ' + dues + ' still due',
         sum.adj >= 0 ? 'green' : '')
     ].join('');

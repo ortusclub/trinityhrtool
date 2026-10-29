@@ -199,30 +199,162 @@
     }).catch(function () { delete otNd.done[period.id]; });
   }
 
+  /* Who is on a cutoff's payroll. A cutoff loaded from a payroll file is the
+     record of who was paid: only the people in it. Otherwise everyone on
+     staff with a rate. A paid cutoff computed here (not from a file) is
+     worked out from the employees as they were when it was marked paid
+     (d.paidEmp), so a later rate change, loan or new hire does not touch it. */
+  function runEmployeesFor(period) {
+    var postedHere = E.isPostedPeriod(state.dtr, period.id);
+    var list = state.employees.filter(function (e) {
+      var d = state.dtr[period.id + '|' + e.id];
+      if (d && d.posted) return true;
+      // Final pay can land in a cutoff after the last day; they're on it then.
+      var finalHere = e.finalPay && e.finalPay.periodId === period.id;
+      return !postedHere && (onStaff(e, period) || finalHere) && E.num(e.monthlyRate) > 0;
+    });
+    if (paidOf(period.id)) {
+      var snap = state.employees.map(function (e) {
+        var d = state.dtr[period.id + '|' + e.id];
+        return d && d.paidEmp ? d.paidEmp : null;
+      }).filter(Boolean);
+      if (snap.length) list = snap;
+    }
+    return list;
+  }
+
+  /* =====================================================================
+     CONTRIBUTIONS — SSS, PhilHealth and Pag-IBIG, employee and employer
+     shares, for every cutoff in a date range (by payout date, or by the
+     cutoff's own dates), as each cutoff computes them (or its payroll file
+     has them). Per employee, with a per-month sheet in the export.
+     ===================================================================== */
+  function contribPeriods(from, to, basis) {
+    var ys = {}, out = [];
+    [from, to].forEach(function (d) { var y = parseInt(d.slice(0, 4), 10); ys[y - 1] = ys[y] = ys[y + 1] = true; });
+    var seen = {};
+    Object.keys(ys).forEach(function (y) {
+      E.buildPeriods(parseInt(y, 10)).forEach(function (p) {
+        if (seen[p.id]) return;
+        var inRange = basis === 'cutoff' ? p.start >= from && p.end <= to : p.payoutDate >= from && p.payoutDate <= to;
+        if (inRange) { seen[p.id] = true; out.push(p); }
+      });
+    });
+    return out.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
+  }
+  function contribData(from, to, basis) {
+    var people = {}, months = {}, periods = contribPeriods(from, to, basis);
+    periods.forEach(function (p) {
+      var month = (basis === 'cutoff' ? p.start : p.payoutDate).slice(0, 7);
+      E.computeRun(runEmployeesFor(p), p, state.dtr, state.settings).slips.forEach(function (s) {
+        var c = s.contributions, er = c.employer, emp = s.employee;
+        var row = { sssEE: c.sss, sssER: er.sss, ec: er.sssEC, phicEE: c.philhealth, phicER: er.philhealth,
+          hdmfEE: c.pagibig, hdmfER: er.pagibig };
+        if (!Object.keys(row).some(function (k) { return row[k]; })) return;
+        [people, months].forEach(function (bucket, i) {
+          var key = i === 0 ? emp.id : month + '|' + emp.id;
+          var t = bucket[key] = bucket[key] || { emp: emp, month: month, cutoffs: 0,
+            sssEE: 0, sssER: 0, ec: 0, phicEE: 0, phicER: 0, hdmfEE: 0, hdmfER: 0 };
+          t.cutoffs++;
+          Object.keys(row).forEach(function (k) { t[k] = E.r2(t[k] + (row[k] || 0)); });
+        });
+      });
+    });
+    var byName = function (a, b) { return (a.emp.lastName + a.emp.firstName).localeCompare(b.emp.lastName + b.emp.firstName); };
+    return {
+      periods: periods,
+      people: Object.keys(people).map(function (k) { return people[k]; }).sort(byName),
+      months: Object.keys(months).map(function (k) { return months[k]; })
+        .sort(function (a, b) { return a.month === b.month ? byName(a, b) : a.month < b.month ? -1 : 1; })
+    };
+  }
+  var CONTRIB_COLS = [
+    ['sssEE', 'SSS EE'], ['sssER', 'SSS ER'], ['ec', 'SSS EC'], ['sssTotal', 'SSS total'],
+    ['phicEE', 'PhilHealth EE'], ['phicER', 'PhilHealth ER'], ['phicTotal', 'PhilHealth total'],
+    ['hdmfEE', 'Pag-IBIG EE'], ['hdmfER', 'Pag-IBIG ER'], ['hdmfTotal', 'Pag-IBIG total'],
+    ['eeTotal', 'Total EE'], ['erTotal', 'Total ER'], ['total', 'Grand total']
+  ];
+  function contribVal(t, k) {
+    var r2 = E.r2;
+    switch (k) {
+      case 'sssTotal': return r2(t.sssEE + t.sssER + t.ec);
+      case 'phicTotal': return r2(t.phicEE + t.phicER);
+      case 'hdmfTotal': return r2(t.hdmfEE + t.hdmfER);
+      case 'eeTotal': return r2(t.sssEE + t.phicEE + t.hdmfEE);
+      case 'erTotal': return r2(t.sssER + t.ec + t.phicER + t.hdmfER);
+      case 'total': return r2(t.sssEE + t.sssER + t.ec + t.phicEE + t.phicER + t.hdmfEE + t.hdmfER);
+      default: return t[k];
+    }
+  }
+  function contribSum(rows) {
+    var t = { sssEE: 0, sssER: 0, ec: 0, phicEE: 0, phicER: 0, hdmfEE: 0, hdmfER: 0 };
+    rows.forEach(function (r) { Object.keys(t).forEach(function (k) { t[k] = E.r2(t[k] + r[k]); }); });
+    return t;
+  }
+  function contribRange() {
+    var from = $('#ctFrom').value, to = $('#ctTo').value, basis = $('#ctBasis').value;
+    if (!from || !to) {
+      var m = new Date();
+      from = from || m.getFullYear() + '-' + ('0' + (m.getMonth() + 1)).slice(-2) + '-01';
+      to = to || E.ymd(new Date(m.getFullYear(), m.getMonth() + 1, 0));
+      $('#ctFrom').value = from; $('#ctTo').value = to;
+    }
+    return { from: from, to: to, basis: basis };
+  }
+  function renderContrib() {
+    var r = contribRange();
+    if (r.from > r.to) { $('#ctBody').innerHTML = '<tr><td colspan="16" class="muted">The start date is after the end date.</td></tr>'; $('#ctFoot').innerHTML = ''; return; }
+    var data = contribData(r.from, r.to, r.basis);
+    $('#ctCutoffs').textContent = data.periods.length
+      ? data.periods.length + ' cutoff(s): ' + data.periods.map(function (p) {
+        return window.PayrollTemplate.cutoffTitle(p) + ' (paid ' + E.fmtShort(E.parseYmd(p.payoutDate)) + ')';
+      }).join(' \u00b7 ')
+      : 'No cutoff in this range.';
+    $('#ctBody').innerHTML = data.people.map(function (t) {
+      var e = t.emp;
+      return '<tr><td class="sticky-col">' + esc(e.lastName + ', ' + e.firstName) + '<div class="muted" style="font-size:11px">' + esc(e.id) + '</div></td>' +
+        '<td>' + esc(e.sssNo || '\u2014') + '</td><td>' + esc(e.philhealthNo || '\u2014') + '</td><td>' + esc(e.pagibigNo || '\u2014') + '</td>' +
+        '<td class="num">' + t.cutoffs + '</td>' +
+        CONTRIB_COLS.map(function (c) { return '<td class="num' + (/total/i.test(c[0]) ? ' strong' : '') + '">' + plain(contribVal(t, c[0])) + '</td>'; }).join('') +
+        '</tr>';
+    }).join('') || '<tr><td colspan="18" class="muted">No contributions in this range.</td></tr>';
+    var sum = contribSum(data.people);
+    $('#ctFoot').innerHTML = data.people.length ? '<tr><td>TOTAL \u2014 ' + data.people.length + ' employees</td><td></td><td></td><td></td><td></td>' +
+      CONTRIB_COLS.map(function (c) { return '<td class="num">' + plain(contribVal(sum, c[0])) + '</td>'; }).join('') + '</tr>' : '';
+  }
+  function exportContrib() {
+    var r = contribRange(), data = contribData(r.from, r.to, r.basis);
+    var X = window.XlsxWriter, S = X.S;
+    var title = 'SSS, PhilHealth and Pag-IBIG contributions \u2014 ' + state.settings.company.name + ' \u2014 ' +
+      r.from + ' to ' + r.to + (r.basis === 'cutoff' ? ' (cutoff dates)' : ' (payout dates)');
+    var idHeads = ['Employee ID', 'Last name', 'First name', 'SSS no.', 'PhilHealth no.', 'Pag-IBIG no.'];
+    var sheet = function (name, list, withMonth) {
+      var heads = (withMonth ? ['Month'] : []).concat(idHeads, ['Cutoffs'], CONTRIB_COLS.map(function (c) { return c[1]; }));
+      var rows = [[{ v: title, t: 's', s: S.BOLD }], heads.map(function (h) { return { v: h, t: 's', s: S.HEAD_TAN }; })];
+      list.forEach(function (t) {
+        var e = t.emp;
+        rows.push((withMonth ? [t.month] : []).concat([e.id, e.lastName, e.firstName, e.sssNo, e.philhealthNo, e.pagibigNo])
+          .map(function (v) { return { v: String(v || ''), t: 's' }; })
+          .concat([{ v: t.cutoffs, t: 'n', s: S.INT }])
+          .concat(CONTRIB_COLS.map(function (c) { return { v: contribVal(t, c[0]), t: 'n', s: S.NUM }; })));
+      });
+      var sum = contribSum(list), lead = (withMonth ? 1 : 0) + idHeads.length + 1;
+      var foot = [];
+      for (var i = 0; i < lead; i++) foot.push({ v: i === 0 ? 'TOTAL' : '', t: 's', s: S.TOTAL });
+      rows.push(foot.concat(CONTRIB_COLS.map(function (c) { return { v: contribVal(sum, c[0]), t: 'n', s: S.TOTAL }; })));
+      return { name: name, rows: rows, cols: heads.map(function (h, i) { return i < lead ? 15 : 13; }), freeze: { x: withMonth ? 4 : 3, y: 2 } };
+    };
+    X.download(X.build([sheet('By employee', data.people, false), sheet('By month', data.months, true)]),
+      ('Contributions \u2014 ' + state.settings.company.name + ' \u2014 ' + r.from + ' to ' + r.to + '.xlsx').replace(/[\\/:*?"<>|]/g, '-'));
+  }
+
   function renderRun() {
     var folded = foldMaturedAdjustments();
     if (folded.length) state.foldNotice = folded;
     renderFoldNotice();
     /* A cutoff loaded from a payroll file is the record of who was paid:
        only the people in it. Otherwise everyone on staff with a rate. */
-    var postedHere = E.isPostedPeriod(state.dtr, state.period.id);
-    state.runEmployees = state.employees.filter(function (e) {
-      var d = state.dtr[state.period.id + '|' + e.id];
-      if (d && d.posted) return true;
-      // Final pay can land in a cutoff after the last day; they're on it then.
-      var finalHere = e.finalPay && e.finalPay.periodId === state.period.id;
-      return !postedHere && (onStaff(e, state.period) || finalHere) && E.num(e.monthlyRate) > 0;
-    });
-    /* A paid cutoff computed here (not from a file) is worked out from the
-       employees as they were when it was marked paid (d.paidEmp), so a later
-       rate change, loan or new hire does not touch it. */
-    if (paidOf(state.period.id)) {
-      var snap = state.employees.map(function (e) {
-        var d = state.dtr[state.period.id + '|' + e.id];
-        return d && d.paidEmp ? d.paidEmp : null;
-      }).filter(Boolean);
-      if (snap.length) state.runEmployees = snap;
-    }
+    state.runEmployees = runEmployeesFor(state.period);
     syncOtNd(state.period);
     state.run = E.computeRun(state.runEmployees, state.period, state.dtr, state.settings);
     renderPeriodMeta();
@@ -3764,7 +3896,7 @@
      ===================================================================== */
   function switchTab(name) {
     $$('#tabs .tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
-    ['run', 'finalpay', 'employees', 'holidays', 'yearend', 'bir2316', 'payslip', 'settings', 'process'].forEach(function (n) {
+    ['run', 'finalpay', 'employees', 'holidays', 'yearend', 'bir2316', 'contrib', 'payslip', 'settings', 'process'].forEach(function (n) {
       $('#tab-' + n).classList.toggle('hidden', n !== name);
     });
     if (name === 'finalpay') renderFinalPay();
@@ -3772,11 +3904,14 @@
     if (name === 'holidays') renderHolidays();
     if (name === 'yearend') renderYearEnd();
     if (name === 'bir2316') renderBir2316();
+    if (name === 'contrib') renderContrib();
     if (name === 'payslip') renderPayslipTab();
     if (name === 'settings') renderSettings();
   }
 
   function wire() {
+    ['#ctFrom', '#ctTo', '#ctBasis'].forEach(function (s) { $(s).addEventListener('change', renderContrib); });
+    $('#btnCtExport').addEventListener('click', exportContrib);
     $('#tabs').addEventListener('click', function (ev) {
       var t = ev.target.closest('.tab');
       if (t) switchTab(t.dataset.tab);

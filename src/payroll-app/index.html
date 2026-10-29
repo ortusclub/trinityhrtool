@@ -26,6 +26,7 @@
   <button class="tab" data-tab="holidays" type="button">Holidays</button>
   <button class="tab" data-tab="yearend" type="button">13th Month &amp; Year-End</button>
   <button class="tab" data-tab="bir2316" type="button">BIR 2316</button>
+  <button class="tab" data-tab="contrib" type="button">Contributions</button>
   <button class="tab" data-tab="payslip" type="button">Payslip</button>
   <button class="tab" data-tab="settings" type="button">Settings &amp; Rules</button>
   <button class="tab" data-tab="process" type="button">Notes/Process</button>
@@ -600,6 +601,40 @@
 
   <!-- ==================== SETTINGS ==================== -->
   <!-- ==================== BIR 2316 ==================== -->
+  <section class="panel hidden" id="tab-contrib">
+    <div class="card">
+      <div class="card-head row">
+        <div>
+          <h2>SSS, PhilHealth &amp; Pag-IBIG contributions</h2>
+          <p class="hint" style="display:block">Employee (EE) and employer (ER) shares for every cutoff in the range, as
+            each cutoff computed them (or as its payroll file has them). <strong>Payout date</strong> counts the cutoffs paid
+            in the range; <strong>Cutoff dates</strong> the cutoffs worked wholly inside it. The export has a sheet by employee
+            and one by month, each with a TOTAL row.</p>
+          <p class="hint" style="display:block" id="ctCutoffs"></p>
+        </div>
+        <button class="btn" id="btnCtExport" type="button">Export (.xlsx)</button>
+      </div>
+      <div class="form-grid" style="padding:0 20px 12px">
+        <label>From <input type="date" id="ctFrom"></label>
+        <label>To <input type="date" id="ctTo"></label>
+        <label>Dates are <select id="ctBasis"><option value="payout">Payout date</option><option value="cutoff">Cutoff dates</option></select></label>
+      </div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact">
+          <thead><tr>
+            <th class="sticky-col">Employee</th><th>SSS no.</th><th>PhilHealth no.</th><th>Pag-IBIG no.</th><th class="num">Cutoffs</th>
+            <th class="num">SSS EE</th><th class="num">SSS ER</th><th class="num">SSS EC</th><th class="num">SSS total</th>
+            <th class="num">PhilHealth EE</th><th class="num">PhilHealth ER</th><th class="num">PhilHealth total</th>
+            <th class="num">Pag-IBIG EE</th><th class="num">Pag-IBIG ER</th><th class="num">Pag-IBIG total</th>
+            <th class="num">Total EE</th><th class="num">Total ER</th><th class="num">Grand total</th>
+          </tr></thead>
+          <tbody id="ctBody"></tbody>
+          <tfoot id="ctFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <section class="panel hidden" id="tab-bir2316">
     <div class="card">
       <div class="card-head row">

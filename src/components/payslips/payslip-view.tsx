@@ -34,7 +34,9 @@ export function PayslipView({
 }) {
   const { lines, currency } = payslip;
   const fmt = (n: number | null | undefined) => money(n, currency);
-  const company = lines.company ?? {};
+  // Trinity payslips take the employer from Settings now, so a corrected
+  // address or TIN shows on payslips already published.
+  const company = details?.company ?? lines.company ?? {};
   const visible = (rows: PayslipLine[]) =>
     rows.filter((r) => {
       if (r.kind === "head") return true;

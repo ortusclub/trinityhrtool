@@ -2700,7 +2700,38 @@
   /* =====================================================================
      YEAR-END TAB
      ===================================================================== */
+  /* Annual Leave from TrinityHR's leave records, fetched once a session and
+     kept on each employee as a non-saved emp.leaveLive (matched by work
+     email), so the leave ledger and final pay read the real balance. */
+  var liveLeave = { byEmail: null, loading: false, error: '' };
+  function attachLiveLeave() {
+    if (!liveLeave.byEmail) return;
+    state.employees.forEach(function (emp) {
+      var b = liveLeave.byEmail[String(emp.email || '').trim().toLowerCase()] || null;
+      Object.defineProperty(emp, 'leaveLive', { value: b, writable: true, configurable: true, enumerable: false });
+    });
+  }
+  function loadLiveLeave() {
+    if (liveLeave.byEmail || liveLeave.loading) return;
+    liveLeave.loading = true;
+    psApi('leave-balances').then(function (data) {
+      liveLeave.byEmail = {};
+      (data.balances || []).forEach(function (b) { liveLeave.byEmail[b.email] = b; });
+      liveLeave.loading = false;
+      renderYearEnd();
+    }).catch(function (e) {
+      liveLeave.loading = false; liveLeave.error = e.message; liveLeave.byEmail = {};
+      renderYearEnd();
+    });
+  }
+
   function renderYearEnd() {
+    loadLiveLeave();
+    attachLiveLeave();
+    var lh = document.getElementById('leaveSource');
+    if (lh) lh.textContent = liveLeave.loading ? 'Loading Annual Leave from TrinityHR…'
+      : liveLeave.error ? 'Could not load TrinityHR leave (' + liveLeave.error + ') — showing PTO days from the payroll files.'
+      : 'Annual Leave from TrinityHR: credits this cycle and approved leave taken (pending is not counted).';
     $('#yearEndYear').textContent = '\u2014 ' + state.year;
 
     var opts = '<option value="">Do not post \u2014 report only</option>' +
@@ -2787,7 +2818,8 @@
         '<td class="sticky-col">' + esc(c.emp.lastName + ', ' + c.emp.firstName) + '</td>' +
         '<td class="num">' + hired + '</td>' +
         '<td class="num">' + plain(l.credits) + '</td>' +
-        '<td class="num">' + plain(l.usedThisYear) + '</td>' +
+        '<td class="num">' + plain(l.usedThisYear) +
+          (l.fromTrinity ? '' : '<div class="auto-note">payroll files — no TrinityHR leave</div>') + '</td>' +
         '<td class="num strong">' + plain(l.remaining) + '</td>' +
         '<td class="num">' + plain(l.monetizeMaxDays) +
           (l.monetizeTenured ? ' <span class="pill rf">tenured</span>' : '') + '</td>' +

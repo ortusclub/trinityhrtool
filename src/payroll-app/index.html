@@ -609,7 +609,7 @@
           <p class="hint" style="display:block">Employee (EE) and employer (ER) shares for every cutoff in the range, as
             each cutoff computed them (or as its payroll file has them). <strong>Payout date</strong> counts the cutoffs paid
             in the range; <strong>Cutoff dates</strong> the cutoffs worked wholly inside it. The export has a sheet by employee
-            and one by month, each with a TOTAL row.</p>
+            and one by month, each with a TOTAL row. A search narrows the table, its TOTAL and the export to the people it matches.</p>
           <p class="hint" style="display:block" id="ctCutoffs"></p>
         </div>
         <button class="btn" id="btnCtExport" type="button">Export (.xlsx)</button>
@@ -618,6 +618,7 @@
         <label>From <input type="date" id="ctFrom"></label>
         <label>To <input type="date" id="ctTo"></label>
         <label>Dates are <select id="ctBasis"><option value="payout">Payout date</option><option value="cutoff">Cutoff dates</option></select></label>
+        <label>Search <input type="search" id="ctSearch" placeholder="Name, ID, email, SSS / PhilHealth / Pag-IBIG no."></label>
       </div>
       <div class="table-scroll" style="padding:0 20px 18px">
         <table class="grid compact">

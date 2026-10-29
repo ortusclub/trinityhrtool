@@ -255,6 +255,11 @@ table.grid.compact th, table.grid.compact td { padding: 6px 10px; }
 
 /* timesheet inputs inside the grid */
 td.dtr { background: #fffdf6; }
+/* Inputs line up under the right-aligned headers; a note under one (OT /
+   ND from TrinityHR) wraps inside the cell instead of widening the column. */
+td.dtr { text-align: right; }
+td.dtr .auto-note { max-width: 96px; margin-left: auto; white-space: normal; line-height: 1.25; }
+td.dtr .auto-note.warn { color: #b42318; }
 td.dtr input {
   width: 56px;
   padding: 4px 6px;

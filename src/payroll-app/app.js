@@ -213,6 +213,16 @@
       var finalHere = e.finalPay && e.finalPay.periodId === state.period.id;
       return !postedHere && (onStaff(e, state.period) || finalHere) && E.num(e.monthlyRate) > 0;
     });
+    /* A paid cutoff computed here (not from a file) is worked out from the
+       employees as they were when it was marked paid (d.paidEmp), so a later
+       rate change, loan or new hire does not touch it. */
+    if (paidOf(state.period.id)) {
+      var snap = state.employees.map(function (e) {
+        var d = state.dtr[state.period.id + '|' + e.id];
+        return d && d.paidEmp ? d.paidEmp : null;
+      }).filter(Boolean);
+      if (snap.length) state.runEmployees = snap;
+    }
     syncOtNd(state.period);
     state.run = E.computeRun(state.runEmployees, state.period, state.dtr, state.settings);
     renderPeriodMeta();
@@ -363,6 +373,13 @@
       if (p) o.textContent = window.PayrollTemplate.cutoffTitle(p) + periodTag(p.id);
     });
   }
+  var confirmUndo = null;
+  function lockedNotice() {
+    var el = document.getElementById('paidLock');
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  }
   function processedHtml() {
     var id = state.period.id, paid = paidOf(id), b = batchOf(id);
     var pub = b && b.published_at;
@@ -372,12 +389,18 @@
       : b ? '<span class="pill spc" title="' + b.count + ' payslips">Payslips drafted, not published</span>'
       : '<span class="pill reg">Payslips not created</span>';
     var paidPill = paid
-      ? '<span class="pill rf">Paid \u2014 marked ' + esc(when(paid.at)) + (paid.by ? ' by ' + esc(paid.by) : '') + '</span> ' +
-        '<button class="link-btn" type="button" data-mark-paid="0">undo</button>'
+      ? '<span class="pill rf">Paid \u2014 marked ' + esc(when(paid.at)) + '</span> ' +
+        (confirmUndo === id ? '' : '<button class="link-btn" type="button" data-mark-paid="ask">undo</button>')
       : '<button class="btn" type="button" data-mark-paid="1">Mark as paid</button>';
     return '<div class="processed-row">' +
       (paid && pub ? '<span class="pill processed">\u2713 Processed</span>' : '<span class="pill">Not processed</span>') +
-      ' ' + paidPill + ' ' + slips + '</div>';
+      ' ' + paidPill + ' ' + slips + '</div>' +
+      (paid ? '<div class="processed-lock" id="paidLock">\ud83d\udd12 Locked \u2014 this cutoff was paid. Its timesheet and computation cannot change ' +
+        '(imports skip it, Clear timesheet and back pay are off, TrinityHR OT / ND no longer update it) until <em>undo</em>.</div>' : '') +
+      (paid && confirmUndo === id ? '<div class="notice warn processed-confirm">Undo <strong>paid</strong> for ' +
+        esc(window.PayrollTemplate.cutoffTitle(state.period)) + '? The cutoff unlocks and its figures can change from what was ' +
+        'actually paid. <button class="btn" type="button" data-mark-paid="0">Yes, undo</button> ' +
+        '<button class="btn ghost" type="button" data-mark-paid="cancel">Cancel</button></div>' : '');
   }
 
   function renderPeriodMeta() {
@@ -757,6 +780,7 @@
   }
 
   function clearDtr() {
+    if (paidOf(state.period.id)) { lockedNotice(); return; }
     if (!confirm('Clear all timesheet entries for this cutoff?')) return;
     state.employees.forEach(function (e) { delete state.dtr[dtrKey(e)]; });
     Store.saveDtr(state.dtr);
@@ -1010,6 +1034,16 @@
         function (err) { return { file: f.name, err: err }; });
     })).then(function (results) {
       var plan = planPayroll(results);
+      // A paid cutoff is locked: its rows are left out until it is undone.
+      var locked = Object.keys(plan.cutoffs).filter(function (id) { return paidOf(id); });
+      if (locked.length) {
+        plan.ops = plan.ops.filter(function (op) { return !paidOf(op.period.id); });
+        locked.forEach(function (id) {
+          plan.problems.push(window.PayrollTemplate.cutoffTitle(plan.cutoffs[id].period) +
+            ' is marked paid \u2014 skipped. Undo "paid" on Payroll Run to change it.');
+          delete plan.cutoffs[id];
+        });
+      }
       if (!plan.ops.length) {
         alert('Nothing to import.\n\n' + plan.problems.slice(0, 8).join('\n'));
         return;
@@ -3769,11 +3803,31 @@
       var btn = ev.target.closest('[data-mark-paid]');
       if (!btn) return;
       var all = state.settings.processed = state.settings.processed || {};
-      if (btn.dataset.markPaid === '1') {
-        all[state.period.id] = { at: new Date().toISOString() };
-      } else {
-        delete all[state.period.id];
+      var act = btn.dataset.markPaid;
+      if (act === 'ask' || act === 'cancel') {
+        confirmUndo = act === 'ask' ? state.period.id : null;
+        renderPeriodMeta();
+        return;
       }
+      confirmUndo = null;
+      var pid = state.period.id, posted = E.isPostedPeriod(state.dtr, pid);
+      if (act === '1') {
+        all[pid] = { at: new Date().toISOString() };
+        if (!posted) state.runEmployees.forEach(function (emp) {
+          var key = pid + '|' + emp.id, d = state.dtr[key] || {};
+          d.paidEmp = JSON.parse(JSON.stringify(emp));
+          state.dtr[key] = d;
+        });
+      } else {
+        delete all[pid];
+        Object.keys(state.dtr).forEach(function (k) {
+          if (k.lastIndexOf(pid + '|', 0) !== 0 || !state.dtr[k] || !state.dtr[k].paidEmp) return;
+          delete state.dtr[k].paidEmp;
+          if (!Object.keys(state.dtr[k]).length) delete state.dtr[k];
+        });
+      }
+      Store.saveDtr(state.dtr);
+      renderRun();
       Store.saveSettings(state.settings);
       renderPeriodMeta();
       tagPeriodOptions();
@@ -3844,6 +3898,7 @@
       if (!b) return;
       var who = state.employees.filter(function (e) { return e.id === b.dataset.backpayDel; })[0];
       if (!who || !who.backPay) return;
+      if (paidOf(state.period.id)) { lockedNotice(); return; }
       if (!confirm('Take the back pay of ' + plain(who.backPay.amount) + ' off this cutoff?')) return;
       delete who.backPay;
       persist();

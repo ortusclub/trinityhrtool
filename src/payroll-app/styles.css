@@ -334,6 +334,11 @@ td.rate .muted { text-align: right; margin-top: 2px; }
 .pill.processed { background: var(--green-soft); color: var(--green); font-weight: 600; }
 .processed-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
 .processed-row .btn { padding: 4px 10px; font-size: 12px; }
+.processed-lock { margin-top: 6px; font-size: 12px; color: var(--green); }
+.processed-lock.flash { animation: lockflash 1.2s ease; }
+@keyframes lockflash { 0%, 60% { background: var(--amber-soft); } 100% { background: transparent; } }
+.processed-confirm { margin-top: 8px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.processed-confirm .btn { padding: 4px 10px; font-size: 12px; }
 
 /* ------------------------------- notices ------------------------------- */
 .notice {

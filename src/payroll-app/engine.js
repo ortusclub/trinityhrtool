@@ -1193,10 +1193,10 @@
    * BIR Form 2316 (Certificate of Compensation Payment / Tax Withheld) for
    * one employee and year: the cutoffs PAID in the year, as yearToDate counts
    * them, plus the year's 13th month and benefits (yearEndFor). Item numbers
-   * follow the form (Part IV-B, then IV-A). Taxable basic is what is left of
+   * follow the September 2021 (ENCS) form. Taxable basic is what is left of
    * the year's taxable income once overtime, other taxable pay and the taxed
    * 13th month already paid are taken out — basic net of the contributions,
-   * which the form lists as non-taxable — so Taxable (50) equals the
+   * which the form lists as non-taxable — so Taxable (52) equals the
    * annual taxable income the year-end tax is worked out on.
    */
   function bir2316For(emp, year, dtrMap, settings) {
@@ -1222,11 +1222,17 @@
     });
     var ye = yearEndFor(emp, year, dtrMap, settings);
     var ytd = ye.ytd;
-    var i46 = r2(ye.thirteenthTaxable), i48 = r2(ot), i49 = r2(others);
-    var i37 = r2(ytd.taxableIncome - i48 - i49 - ytd.thirteenthTaxedPaid);
-    var i50 = r2(i37 + i46 + i48 + i49);
-    var i32 = r2(ye.thirteenthExempt), i33 = r2(ytd.deMinimis), i34 = r2(mand), i35 = r2(ye.yearEndBonus);
-    var i36 = r2(i32 + i33 + i34 + i35);
+    /* Items as the September 2021 (ENCS) form numbers them, filled the way
+       the company's certificates are: transport sits with de minimis (35),
+       34 is the 13th month and other benefits left tax-free, 25A is the tax
+       withheld as adjusted at year-end (= tax due). */
+    var i48 = r2(ye.thirteenthTaxable), i50 = r2(ot), i51a = r2(others);
+    var i39 = r2(ytd.taxableIncome - i50 - i51a - ytd.thirteenthTaxedPaid);
+    var i52 = r2(i39 + i48 + i50 + i51a);
+    var i34 = r2(Math.max(0, ye.thirteenthExempt - ytd.transport));
+    var i35 = r2(ytd.deMinimis + (ye.thirteenthExempt - i34));
+    var i36 = r2(mand), i37 = r2(ye.yearEndBonus);
+    var i38 = r2(i34 + i35 + i36 + i37);
     var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };
     var from = year + '-01-01', to = year + '-12-31';
     if (isDate(emp.dateHired) && emp.dateHired > from) from = emp.dateHired;
@@ -1234,11 +1240,12 @@
     return {
       year: year, periodFrom: from, periodTo: to, cutoffs: worked.length,
       items: {
-        i32: i32, i33: i33, i34: i34, i35: i35, i36: i36,
-        i37: i37, i46: i46, i48: i48, i49: i49, i50: i50,
-        i19: r2(i36 + i50), i20: i36, i21: i50, i22: 0, i23: i50,
-        i24: ye.annualTaxDue, i25a: ye.taxWithheld, i25b: 0, i26: ye.annualTaxDue
+        i34: i34, i35: i35, i36: i36, i37: i37, i38: i38,
+        i39: i39, i48: i48, i50: i50, i51a: i51a, i52: i52,
+        i19: r2(i38 + i52), i20: i38, i21: i52, i22: 0, i23: i52,
+        i24: ye.annualTaxDue, i25a: ye.annualTaxDue, i25b: 0, i26: ye.annualTaxDue, i27: 0, i28: ye.annualTaxDue
       },
+      withheld: ye.taxWithheld,
       adjustment: ye.adjustment
     };
   }

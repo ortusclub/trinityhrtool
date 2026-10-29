@@ -65,6 +65,9 @@
       leaveExemptDays: 10
     },
 
+    // Cutoffs marked paid on Payroll Run: { periodId: { at, by } }.
+    processed: {},
+
     leave: {
       annualCredits: 15,        // default when an employee has none set
       allowNegative: false,     // warn once credits are exhausted

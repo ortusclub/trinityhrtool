@@ -1189,6 +1189,58 @@
     return { amount: r2(total), rows: rows, from: effective, to: ymd(last), oldRate: r2(num(oldRate)), newRate: r2(num(newRate)) };
   }
 
+  /**
+   * BIR Form 2316 (Certificate of Compensation Payment / Tax Withheld) for
+   * one employee and year: the cutoffs PAID in the year, as yearToDate counts
+   * them, plus the year's 13th month and benefits (yearEndFor). Item numbers
+   * follow the form (Part IV-B, then IV-A). Taxable basic is what is left of
+   * the year's taxable income once overtime, other taxable pay and the taxed
+   * 13th month already paid are taken out — basic net of the contributions,
+   * which the form lists as non-taxable — so Taxable (50) equals the
+   * annual taxable income the year-end tax is worked out on.
+   */
+  function bir2316For(emp, year, dtrMap, settings) {
+    var ot = 0, others = 0, mand = 0, worked = [];
+    var seen = {};
+    periodsOfYear(year).forEach(function (p) {
+      if (seen[p.id]) return;
+      seen[p.id] = true;
+      var d = (dtrMap || {})[p.id + '|' + emp.id];
+      if (!(d && d.posted) && staffDays(emp, p, settings).onStaff === 0) return;
+      if (!(d && d.posted) && isPostedPeriod(dtrMap, p.id)) return;
+      var slip = computePayslip(withCarriedRate(emp, p, dtrMap), p, d, settings, null);
+      if (!slip.earnings.grossPay) return;
+      var e = slip.earnings;
+      worked.push(p);
+      ot += (e.otPay || 0) + (e.ndPay || 0) + (e.holidayPay || 0) + (e.restDayPay || 0);
+      others += (e.quarterlyBonus || 0) + (e.taxableAllowances || []).reduce(function (t, a) {
+        return /adjustment/i.test(a.label) ? t : t + a.amount;   // salary adjustments are basic
+      }, 0);
+      mand += slip.contributions.mandatoriesApplied || 0;
+    });
+    var ye = yearEndFor(emp, year, dtrMap, settings);
+    var ytd = ye.ytd;
+    var i46 = r2(ye.thirteenthTaxable), i48 = r2(ot), i49 = r2(others);
+    var i37 = r2(ytd.taxableIncome - i48 - i49 - ytd.thirteenthTaxedPaid);
+    var i50 = r2(i37 + i46 + i48 + i49);
+    var i32 = r2(ye.thirteenthExempt), i33 = r2(ytd.deMinimis), i34 = r2(mand), i35 = r2(ye.yearEndBonus);
+    var i36 = r2(i32 + i33 + i34 + i35);
+    var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };
+    var from = year + '-01-01', to = year + '-12-31';
+    if (isDate(emp.dateHired) && emp.dateHired > from) from = emp.dateHired;
+    if (isDate(emp.endDate) && emp.endDate < to) to = emp.endDate;
+    return {
+      year: year, periodFrom: from, periodTo: to, cutoffs: worked.length,
+      items: {
+        i32: i32, i33: i33, i34: i34, i35: i35, i36: i36,
+        i37: i37, i46: i46, i48: i48, i49: i49, i50: i50,
+        i19: r2(i36 + i50), i20: i36, i21: i50, i22: 0, i23: i50,
+        i24: ye.annualTaxDue, i25a: ye.taxWithheld, i25b: 0, i26: ye.annualTaxDue
+      },
+      adjustment: ye.adjustment
+    };
+  }
+
   /** A cutoff by its id ("2026-11-P10"), from the year it names or either side. */
   function periodById(id) {
     var y = parseInt(String(id).slice(0, 4), 10), hit = null;
@@ -1330,6 +1382,7 @@
   }
 
   global.PayrollEngine = {
+    bir2316For: bir2316For,
     backPayFor: backPayFor,
     finalPayFor: finalPayFor,
     periodById: periodById,

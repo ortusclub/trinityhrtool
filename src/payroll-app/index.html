@@ -25,6 +25,7 @@
   <button class="tab" data-tab="employees" type="button">Employees</button>
   <button class="tab" data-tab="holidays" type="button">Holidays</button>
   <button class="tab" data-tab="yearend" type="button">13th Month &amp; Year-End</button>
+  <button class="tab" data-tab="bir2316" type="button">BIR 2316</button>
   <button class="tab" data-tab="payslip" type="button">Payslip</button>
   <button class="tab" data-tab="settings" type="button">Settings &amp; Rules</button>
   <button class="tab" data-tab="process" type="button">Notes/Process</button>
@@ -596,6 +597,36 @@
   </section>
 
   <!-- ==================== SETTINGS ==================== -->
+  <!-- ==================== BIR 2316 ==================== -->
+  <section class="panel hidden" id="tab-bir2316">
+    <div class="card">
+      <div class="card-head row">
+        <div>
+          <h2>BIR Form 2316 <span class="muted" id="birYear"></span></h2>
+          <p class="hint" style="display:block">
+            Certificate of Compensation Payment / Tax Withheld for each employee on this payroll in the year
+            (change the year on Payroll Run). Figures are the cutoffs paid in the year plus the year's 13th month
+            and benefits, as on the 13th Month &amp; Year-End tab, so Taxable (item 50) is the annual taxable income
+            and Tax due (item 24) the annual tax. Click a name for the certificate to print; the export has every
+            item for everyone. The 13th month and tax refund are included as due for the year, whether or not
+            they have been posted yet.
+          </p>
+        </div>
+        <button class="btn ghost" id="btnBirExport" type="button">Export all (.xlsx)</button>
+      </div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact">
+          <thead><tr>
+            <th>Employee</th><th>TIN</th><th>Period</th>
+            <th class="num">Gross (19)</th><th class="num">Non-taxable (36)</th><th class="num">Taxable (50)</th>
+            <th class="num">Tax due (24)</th><th class="num">Withheld (25A)</th><th class="num">Refund / (due)</th>
+          </tr></thead>
+          <tbody id="birBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- ==================== NOTES / PROCESS ==================== -->
   <section class="panel hidden" id="tab-process">
     <div class="card">
@@ -896,6 +927,19 @@
       </div>
     </div>
     <div id="thirteenthBody" style="padding:18px"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="birModal">
+  <div class="modal wide">
+    <div class="modal-head no-print">
+      <h2>BIR Form 2316</h2>
+      <div>
+        <button class="btn ghost" id="btnPrintBir" type="button">Print</button>
+        <button class="btn ghost" id="btnCloseBir" type="button">Close</button>
+      </div>
+    </div>
+    <div id="birCert" style="padding:18px"></div>
   </div>
 </div>
 

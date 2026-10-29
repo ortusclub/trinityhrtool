@@ -1731,6 +1731,112 @@
     });
   }
 
+  /* =====================================================================
+     BIR 2316 — the year's certificate per employee (engine bir2316For)
+     ===================================================================== */
+  var BIR_ITEMS = [
+    ['A. Non-taxable / exempt compensation', null],
+    ['27–31', 'Basic salary, holiday, overtime, night shift and hazard pay (minimum wage earner)', 'zero'],
+    ['32', '13th month pay and other benefits', 'i32'],
+    ['33', 'De minimis benefits', 'i33'],
+    ['34', 'SSS, GSIS, PHIC and Pag-IBIG contributions and union dues (employee share only)', 'i34'],
+    ['35', 'Salaries and other forms of compensation', 'i35'],
+    ['36', 'Total non-taxable / exempt compensation income', 'i36', true],
+    ['B. Taxable compensation income, regular', null],
+    ['37', 'Basic salary', 'i37'],
+    ['38–42', 'Representation, transportation, cost of living, fixed housing, others', 'zero'],
+    ['Supplementary', null],
+    ['43–45', 'Commission, profit sharing, fees including director\u2019s fees', 'zero'],
+    ['46', 'Taxable 13th month benefits', 'i46'],
+    ['47', 'Hazard pay', 'zero'],
+    ['48', 'Overtime pay (with night differential, holiday and rest-day pay)', 'i48'],
+    ['49', 'Others (quarterly bonus, taxable allowances)', 'i49'],
+    ['50', 'Total taxable compensation income', 'i50', true],
+    ['Part IV-A Summary', null],
+    ['19', 'Gross compensation income from present employer (36 + 50)', 'i19'],
+    ['20', 'Less: total non-taxable / exempt compensation (36)', 'i20'],
+    ['21', 'Taxable compensation income from present employer (50)', 'i21'],
+    ['22', 'Add: taxable compensation income from previous employer', 'i22'],
+    ['23', 'Gross taxable compensation income (21 + 22)', 'i23', true],
+    ['24', 'Tax due', 'i24', true],
+    ['25A', 'Taxes withheld \u2014 present employer', 'i25a'],
+    ['25B', 'Taxes withheld \u2014 previous employer', 'i25b'],
+    ['26', 'Total amount of taxes withheld as adjusted', 'i26', true]
+  ];
+  function birPeople() {
+    return state.employees.map(function (emp) {
+      return { emp: emp, f: E.bir2316For(emp, state.year, state.dtr, state.settings) };
+    }).filter(function (x) { return x.f.cutoffs > 0; })
+      .sort(function (a, b) { return (a.emp.lastName + a.emp.firstName).localeCompare(b.emp.lastName + b.emp.firstName); });
+  }
+  function renderBir2316() {
+    $('#birYear').textContent = '\u2014 ' + state.year;
+    var people = birPeople();
+    $('#birBody').innerHTML = people.length ? people.map(function (x) {
+      var it = x.f.items, adj = x.f.adjustment;
+      return '<tr class="clickable" data-bir-emp="' + esc(x.emp.id) + '"><td class="sticky-col"><button class="link-btn" type="button">' +
+        esc(x.emp.lastName + ', ' + x.emp.firstName) + '</button></td>' +
+        '<td>' + esc(x.emp.tin || '\u2014') + '</td>' +
+        '<td>' + esc(x.f.periodFrom.slice(5)) + ' \u2013 ' + esc(x.f.periodTo.slice(5)) + '</td>' +
+        '<td class="num">' + plain(it.i19) + '</td><td class="num">' + plain(it.i36) + '</td><td class="num">' + plain(it.i50) + '</td>' +
+        '<td class="num">' + plain(it.i24) + '</td><td class="num">' + plain(it.i25a) + '</td>' +
+        '<td class="num' + (adj < 0 ? ' warn' : '') + '">' + (adj < 0 ? '(' + plain(-adj) + ')' : plain(adj)) + '</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="muted" style="padding:18px">Nobody was paid in ' + state.year + '.</td></tr>';
+  }
+  function openBir2316(empId) {
+    var emp = state.employees.filter(function (e) { return e.id === empId; })[0];
+    if (!emp) return;
+    var f = E.bir2316For(emp, state.year, state.dtr, state.settings), it = f.items, co = state.settings.company;
+    var line = function (label, value) {
+      return '<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid #eee"><span class="muted" style="width:220px">' +
+        label + '</span><strong>' + esc(value || '') + '</strong></div>';
+    };
+    $('#birCert').innerHTML =
+      '<div style="text-align:center;margin-bottom:12px"><div class="muted" style="font-size:12px">Republic of the Philippines \u00b7 Bureau of Internal Revenue</div>' +
+      '<h2 style="margin:4px 0">BIR Form No. 2316</h2><div>Certificate of Compensation Payment / Tax Withheld</div>' +
+      '<div class="muted" style="font-size:12px">For compensation payment with or without tax withheld</div></div>' +
+      line('1 For the year', String(f.year)) +
+      line('2 For the period', f.periodFrom + ' to ' + f.periodTo) +
+      '<h3 style="margin:14px 0 4px">Part I \u2014 Employee information</h3>' +
+      line('3 TIN', emp.tin) + line('4 Employee\u2019s name', emp.lastName + ', ' + emp.firstName) +
+      line('6 Registered address', '') + line('7 Date of birth', '') + line('8 Contact number', emp.phone || '') +
+      line('9 Statutory minimum wage', 'Not a minimum wage earner') +
+      '<h3 style="margin:14px 0 4px">Part II \u2014 Employer information (present)</h3>' +
+      line('12 TIN', co.tin) + line('13 Employer\u2019s name', co.name) + line('14 Registered address', co.address) +
+      line('15 Type of employer', 'Main employer') +
+      '<h3 style="margin:14px 0 4px">Part IV-B \u2014 Details of compensation income and tax withheld from present employer</h3>' +
+      '<table class="grid compact" style="width:100%">' + BIR_ITEMS.map(function (r) {
+        if (r[1] === null) return '<tr><td colspan="3" style="font-weight:600;background:#f6f6f2">' + esc(r[0]) + '</td></tr>';
+        var v = r[2] === 'zero' ? 0 : it[r[2]];
+        return '<tr' + (r[3] ? ' style="font-weight:600"' : '') + '><td style="width:60px">' + esc(r[0]) + '</td><td>' + esc(r[1]) +
+          '</td><td class="num">' + plain(v) + '</td></tr>';
+      }).join('') + '</table>' +
+      '<p class="muted" style="font-size:11.5px;margin-top:10px">Worked out from ' + f.cutoffs + ' cutoff(s) paid in ' + f.year +
+      ' and the year\u2019s 13th month. Year-end adjustment: ' +
+      (f.adjustment >= 0 ? 'refund of ' + plain(f.adjustment) : 'tax still due of ' + plain(-f.adjustment)) +
+      '. Address, date of birth and signatures are filled in on the official form.</p>';
+    $('#birModal').classList.remove('hidden');
+  }
+  function exportBir2316() {
+    var people = birPeople();
+    var heads = ['Employee ID', 'Last name', 'First name', 'TIN', 'Period from', 'Period to'];
+    var keys = [];
+    BIR_ITEMS.forEach(function (r) { if (r[1] !== null && r[2] !== 'zero') { heads.push(r[0] + ' ' + r[1]); keys.push(r[2]); } });
+    heads.push('Refund / (due)');
+    var X = window.XlsxWriter, S = X.S;
+    var rows = [[{ v: 'BIR 2316 \u2014 ' + state.settings.company.name + ' \u2014 ' + state.year, t: 's', s: S.BOLD }],
+      heads.map(function (h) { return { v: h, t: 's', s: S.HEAD }; })];
+    people.forEach(function (x) {
+      rows.push([x.emp.id, x.emp.lastName, x.emp.firstName, x.emp.tin || '', x.f.periodFrom, x.f.periodTo]
+        .map(function (v) { return { v: String(v || ''), t: 's' }; })
+        .concat(keys.map(function (k) { return { v: x.f.items[k], t: 'n', s: S.NUM }; }))
+        .concat([{ v: x.f.adjustment, t: 'n', s: S.NUM }]));
+    });
+    var blob = X.build([{ name: 'BIR 2316 ' + state.year, rows: rows, cols: heads.map(function (h, i) { return i < 6 ? 14 : 16; }),
+      freeze: { x: 3, y: 2 } }]);
+    X.download(blob, 'BIR 2316 \u2014 ' + state.settings.company.name.replace(/[\\/:*?"<>|]/g, '-') + ' \u2014 ' + state.year + '.xlsx');
+  }
+
   function fpChanged() {
     Store.saveEmployees(state.employees);
     renderFinalPay();
@@ -3373,13 +3479,14 @@
      ===================================================================== */
   function switchTab(name) {
     $$('#tabs .tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
-    ['run', 'finalpay', 'employees', 'holidays', 'yearend', 'payslip', 'settings', 'process'].forEach(function (n) {
+    ['run', 'finalpay', 'employees', 'holidays', 'yearend', 'bir2316', 'payslip', 'settings', 'process'].forEach(function (n) {
       $('#tab-' + n).classList.toggle('hidden', n !== name);
     });
     if (name === 'finalpay') renderFinalPay();
     if (name === 'employees') { renderEmployees(); renderItemsEditor(); renderLoansEditor(); }
     if (name === 'holidays') renderHolidays();
     if (name === 'yearend') renderYearEnd();
+    if (name === 'bir2316') renderBir2316();
     if (name === 'payslip') renderPayslipTab();
     if (name === 'settings') renderSettings();
   }
@@ -3426,6 +3533,13 @@
     $('#psPreviewBatch').addEventListener('change', psLoadPreviewPeople);
     $('#psEmployee').addEventListener('change', psPreview);
     wireFinalPay();
+    $('#birBody').addEventListener('click', function (ev) {
+      var tr = ev.target.closest('tr[data-bir-emp]');
+      if (tr) openBir2316(tr.dataset.birEmp);
+    });
+    $('#btnBirExport').addEventListener('click', exportBir2316);
+    $('#btnPrintBir').addEventListener('click', function () { window.print(); });
+    $('#btnCloseBir').addEventListener('click', function () { $('#birModal').classList.add('hidden'); });
     $('#runBody').addEventListener('click', function (ev) {
       var b = ev.target.closest('[data-backpay-del]');
       if (!b) return;

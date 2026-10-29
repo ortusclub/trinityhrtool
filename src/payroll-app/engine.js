@@ -865,12 +865,22 @@
     var credits = (emp.leaveCredits === undefined || emp.leaveCredits === null)
       ? settings.leave.annualCredits : num(emp.leaveCredits);
     var used = 0, usedToDate = 0;
-    periodsOfYear(year).forEach(function (p) {
-      var d = (dtrMap || {})[p.id + '|' + emp.id];
-      var days = d ? num(d.ptoDays) : 0;
-      used += days;
-      if (!uptoPayoutDate || p.payoutDate <= uptoPayoutDate) usedToDate += days;
-    });
+    /* Annual Leave as TrinityHR has it this cycle (emp.leaveLive, set by the
+       app from /api/payroll/leave-balances): the credits given, approved
+       leave taken. Otherwise the PTO days in the year's payroll. */
+    var live = emp.leaveLive;
+    if (live && String(live.cycleStart).slice(0, 4) === String(year)) {
+      credits = num(live.allocated);
+      used = usedToDate = num(live.used);
+    } else {
+      live = null;
+      periodsOfYear(year).forEach(function (p) {
+        var d = (dtrMap || {})[p.id + '|' + emp.id];
+        var days = d ? num(d.ptoDays) : 0;
+        used += days;
+        if (!uptoPayoutDate || p.payoutDate <= uptoPayoutDate) usedToDate += days;
+      });
+    }
 
     // Only unused credits can be converted, and never more than the cap, so
     // an overdrawn balance monetizes nothing rather than going negative.
@@ -890,7 +900,8 @@
       monetizeHireYear: cap.hireYear,
       monetizableDays: r2(monetizableDays),
       monetizableAmount: r2(monetizableDays * dailyRate),
-      monetizeCappedByRule: remaining > cap.maxDays
+      monetizeCappedByRule: remaining > cap.maxDays,
+      fromTrinity: !!live
     };
   }
 

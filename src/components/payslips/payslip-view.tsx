@@ -38,6 +38,7 @@ export function PayslipView({
   // Trinity payslips take the employer from Settings now, so a corrected
   // address or TIN shows on payslips already published.
   const company = details?.company ?? lines.company ?? {};
+  const logo = accountLogo(details?.account);
   const visible = (rows: PayslipLine[]) =>
     rows.filter((r) => {
       if (r.kind === "head") return true;
@@ -53,14 +54,13 @@ export function PayslipView({
     <div className="rounded-xl border border-gray-200 bg-white p-6 print:border-0 print:p-0">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <div>
-          {/* The logo of the account the person works on: Trinity for now. */}
-          {/trinity/i.test(details?.account ?? "") && (
+          {logo && (
             <Image
-              src="/trinity-logo-black.png"
-              alt="Trinity"
-              width={808}
-              height={153}
-              className="mb-2 h-7 w-auto"
+              src={logo.src}
+              alt={logo.alt}
+              width={logo.width}
+              height={logo.height}
+              className={`mb-2 w-auto ${logo.className}`}
               priority
             />
           )}
@@ -181,4 +181,13 @@ function LineTable({
       </table>
     </div>
   );
+}
+
+/** The logo of the account the person works on (Settings has no say). */
+function accountLogo(account: string | undefined) {
+  if (/trinity/i.test(account ?? ""))
+    return { src: "/trinity-logo-black.png", alt: "Trinity", width: 808, height: 153, className: "h-7" };
+  if (/ortus/i.test(account ?? ""))
+    return { src: "/ortus-logo-black.png", alt: "The Ortus Club", width: 769, height: 399, className: "h-14" };
+  return null;
 }

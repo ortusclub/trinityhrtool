@@ -236,7 +236,9 @@
     Object.keys(ys).forEach(function (y) {
       E.buildPeriods(parseInt(y, 10)).forEach(function (p) {
         if (seen[p.id]) return;
-        var inRange = basis === 'cutoff' ? p.start >= from && p.end <= to : p.payoutDate >= from && p.payoutDate <= to;
+        // Month worked: the cutoff's own dates (contributions belong to the
+        // month worked — Sep 16-30 is September though paid Oct 10).
+        var inRange = basis === 'cutoff' ? p.start >= from && p.start <= to : p.payoutDate >= from && p.payoutDate <= to;
         if (inRange) { seen[p.id] = true; out.push(p); }
       });
     });
@@ -340,7 +342,7 @@
     var r = contribRange(), data = contribData(r.from, r.to, r.basis);
     var X = window.XlsxWriter, S = X.S;
     var title = 'SSS, PhilHealth and Pag-IBIG contributions \u2014 ' + state.settings.company.name + ' \u2014 ' +
-      r.from + ' to ' + r.to + (r.basis === 'cutoff' ? ' (cutoff dates)' : ' (payout dates)');
+      r.from + ' to ' + r.to + (r.basis === 'cutoff' ? ' (month worked)' : ' (payout dates)');
     var idHeads = ['Employee ID', 'Last name', 'First name', 'Gross pay', 'SSS no.', 'PhilHealth no.', 'Pag-IBIG no.'];
     var sheet = function (name, list, withMonth) {
       var heads = (withMonth ? ['Month'] : []).concat(idHeads, ['Cutoffs'], CONTRIB_COLS.map(function (c) { return c[1]; }));

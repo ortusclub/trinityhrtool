@@ -3156,7 +3156,7 @@
       ? 'Publish ' + count + ' payslip(s) for ' + label + '?\n\nEach person will see their own under My Workspace → Payslips.'
       : 'Unpublish ' + label + '?\n\nEmployees will no longer see these payslips.')) return;
     psApi('payslips/release', 'POST', { batch_id: id, published: publish })
-      .then(function () { return Promise.all([psLoadStatus(), psLoadBatches()]); },
+      .then(function () { loadBatchStatus(true); return Promise.all([psLoadStatus(), psLoadBatches()]); },
         function (err) { alert('Could not ' + (publish ? 'publish' : 'unpublish') + '.\n\n' + err.message); });
   }
 
@@ -3235,7 +3235,7 @@
       if (!confirm('Delete ' + KIND_NAME[b.kind] + ' · ' + b.label + ' (' + b.count + ' payslips)?' +
         (b.published_at ? '\n\nIt is published — employees will lose these payslips.' : ''))) return;
       psApi('payslips?batch=' + encodeURIComponent(b.id), 'DELETE')
-        .then(function () { return Promise.all([psLoadStatus(), psLoadBatches()]); },
+        .then(function () { loadBatchStatus(true); return Promise.all([psLoadStatus(), psLoadBatches()]); },
           function (err) { alert('Could not delete.\n\n' + err.message); });
     }
   }

@@ -331,6 +331,9 @@ td.rate .muted { text-align: right; margin-top: 2px; }
 .pill.rf { background: #eef2f8; color: #475569; }
 .pill.reg { background: var(--red-soft); color: var(--red); }
 .pill.spc { background: var(--amber-soft); color: var(--amber); }
+.pill.processed { background: var(--green-soft); color: var(--green); font-weight: 600; }
+.processed-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.processed-row .btn { padding: 4px 10px; font-size: 12px; }
 
 /* ------------------------------- notices ------------------------------- */
 .notice {

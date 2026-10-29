@@ -6,6 +6,7 @@ import { displayName } from "@/lib/utils";
 import { getSlip, isReleased, loadPayslipSettings } from "@/lib/payslips-store";
 import { PayslipView } from "@/components/payslips/payslip-view";
 import { PrintButton } from "@/components/payslips/print-button";
+import { payslipDetails } from "@/lib/payslip-details";
 
 // The viewer's own payslip from a released batch; nobody else's, ever.
 export default async function PayslipPage({
@@ -22,6 +23,10 @@ export default async function PayslipPage({
     loadPayslipSettings(db),
   ]);
   if (!slip || !released) notFound();
+  // Trinity payroll payslips carry the account and government numbers.
+  const details = /trinity/i.test(slip.lines.company?.name ?? "")
+    ? await payslipDetails({ email: user.email, code: slip.lines.employee?.code, userCompany: user.company })
+    : null;
 
   return (
     <div className="space-y-6">
@@ -31,7 +36,7 @@ export default async function PayslipPage({
         </Link>
         <PrintButton />
       </div>
-      <PayslipView payslip={slip} employeeName={displayName(user)} settings={settings} />
+      <PayslipView payslip={slip} employeeName={displayName(user)} settings={settings} details={details} />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type PayslipDetails = {
+  /** The employer as Settings & Rules → Company has it now. */
+  company?: { name?: string; address?: string; tin?: string };
   account?: string;
   sss?: string;
   philhealth?: string;
@@ -37,13 +39,17 @@ export async function payslipDetails(args: {
   const email = clean(args.email).toLowerCase();
   const code = clean(args.code);
   let emp: PayrollEmployee | undefined;
+  let company: PayslipDetails["company"];
   try {
-    const { data } = await createAdminClient()
+    const { data: rows } = await createAdminClient()
       .from("payroll_state")
-      .select("value")
-      .eq("key", "employees")
-      .maybeSingle();
-    const list = (Array.isArray(data?.value) ? data!.value : []) as PayrollEmployee[];
+      .select("key, value")
+      .in("key", ["employees", "settings"]);
+    const value = (k: string) => rows?.find((r) => r.key === k)?.value;
+    const list = (Array.isArray(value("employees")) ? value("employees") : []) as PayrollEmployee[];
+    const co = ((value("settings") as { company?: Record<string, unknown> } | undefined)?.company ?? {});
+    const address = [clean(co.address), clean(co.zip)].filter(Boolean).join(" ");
+    if (clean(co.name)) company = { name: clean(co.name), address, tin: clean(co.tin) };
     emp =
       (email ? list.find((e) => clean(e.email).toLowerCase() === email) : undefined) ??
       (code ? list.find((e) => clean(e.id) === code) : undefined);
@@ -51,6 +57,7 @@ export async function payslipDetails(args: {
     emp = undefined;
   }
   const out: PayslipDetails = {
+    company,
     account: clean(emp?.company) || clean(args.userCompany) || undefined,
     sss: clean(emp?.sssNo) || undefined,
     philhealth: clean(emp?.philhealthNo) || undefined,

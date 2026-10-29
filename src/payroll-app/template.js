@@ -145,7 +145,7 @@
     rows.push(title);
     rows.push(PAYROLL_COLUMNS.map(function (c) { return { v: c.head, t: 's', s: S.HEAD_TAN }; }));
 
-    var at = {};
+    var at = {}, totals = {};
     PAYROLL_COLUMNS.forEach(function (c, i) { at[c.key] = X.colName(i + 1); });
 
     var factor = settings.dayFactor, hpd = settings.schedule.hoursPerDay, prem = settings.premium;
@@ -240,7 +240,10 @@
       };
       if (summary) {
         var vals = summary(s, i);
-        PAYROLL_COLUMNS.forEach(function (col) { if (cells[col.key].t === 'f') cells[col.key] = n(vals[col.key]); });
+        PAYROLL_COLUMNS.forEach(function (col) {
+          if (cells[col.key].t === 'f') cells[col.key] = n(vals[col.key]);
+          if (cells[col.key].t === 'n') totals[col.key] = (totals[col.key] || 0) + Number(cells[col.key].v || 0);
+        });
       }
       rows.push(PAYROLL_COLUMNS.map(function (col) { return cells[col.key]; }));
     });
@@ -250,7 +253,7 @@
       rows.push(PAYROLL_COLUMNS.map(function (c, i) {
         if (i === 2) return { v: 'TOTAL \u2014 ' + run.slips.length + ' employees', t: 's', s: S.TOTAL };
         if (NO_TOTAL[c.key]) return { v: '', t: 's', s: S.TOTAL };
-        return { v: 'SUM(' + at[c.key] + '4:' + at[c.key] + lastData + ')', t: 'f', s: S.TOTAL };
+        return { v: E2(totals[c.key] || 0), t: 'n', s: S.TOTAL };
       }));
     }
     return {

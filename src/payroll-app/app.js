@@ -270,7 +270,8 @@
     };
   }
   var CONTRIB_COLS = [
-    ['sssEE', 'SSS EE'], ['sssER', 'SSS ER'], ['ec', 'SSS EC'], ['sssTotal', 'SSS total'],
+    // SSS total is EE + ER; EC (employer only) stands apart after it.
+    ['sssEE', 'SSS EE'], ['sssER', 'SSS ER'], ['sssTotal', 'SSS total'], ['ec', 'SSS EC'],
     ['phicEE', 'PhilHealth EE'], ['phicER', 'PhilHealth ER'], ['phicTotal', 'PhilHealth total'],
     ['hdmfEE', 'Pag-IBIG EE'], ['hdmfER', 'Pag-IBIG ER'], ['hdmfTotal', 'Pag-IBIG total'],
     ['eeTotal', 'Total EE'], ['erTotal', 'Total ER'], ['total', 'Grand total']
@@ -278,7 +279,7 @@
   function contribVal(t, k) {
     var r2 = E.r2;
     switch (k) {
-      case 'sssTotal': return r2(t.sssEE + t.sssER + t.ec);
+      case 'sssTotal': return r2(t.sssEE + t.sssER);
       case 'phicTotal': return r2(t.phicEE + t.phicER);
       case 'hdmfTotal': return r2(t.hdmfEE + t.hdmfER);
       case 'eeTotal': return r2(t.sssEE + t.phicEE + t.hdmfEE);

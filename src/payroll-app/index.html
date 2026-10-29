@@ -48,7 +48,7 @@
       <div class="period-meta" id="periodMeta"></div>
       <div class="period-actions">
         <button class="btn ghost" id="btnClearDtr" type="button">Clear timesheet</button>
-        <button class="btn ghost" id="btnExportCsv" type="button">Export CSV</button>
+        <button class="btn ghost" id="btnExportCsv" type="button">Export summary (.xlsx)</button>
         <button class="btn ghost" id="btnExportBpi" type="button">BPI bank file (.xls)</button>
         <button class="btn ghost" id="btnSendTrinity" type="button" style="display:none">Send to TrinityHR</button>
         <button class="btn ghost" id="btnImportTemplate" type="button">Import payroll files</button>
@@ -671,7 +671,7 @@
           <li>Once: the <strong>BPI funding account</strong> in Settings &amp; Rules → Company.</li>
           <li>Payroll Run → <strong>BPI bank file (.xls)</strong>. Everyone with net pay is in it, their name in column H.</li>
           <li>Read the popup: people not on BPI (e.g. GCash), account numbers that are not 10 digits, no bank on file, negative net pay (not in the file). Pay those separately.</li>
-          <li>Upload in <strong>BPI BizLink</strong> as "Pay BPI Accounts – Lumpsum" and check the total. <strong>Export CSV</strong> keeps a record of the cutoff.</li>
+          <li>Upload in <strong>BPI BizLink</strong> as "Pay BPI Accounts – Lumpsum" and check the total. <strong>Export summary (.xlsx)</strong> keeps a record of the cutoff — laid out like the payroll template, with a TOTAL row.</li>
         </ol>
         <h3>Salary increase</h3>
         <ol>

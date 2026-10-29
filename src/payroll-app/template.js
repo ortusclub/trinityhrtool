@@ -128,12 +128,18 @@
   /* ---------------------------------------------------------------------
      SHEET 1 — Payroll
      --------------------------------------------------------------------- */
-  function payrollSheet(run, period, settings) {
+  /* `summary`: the payroll summary export — the same sheet without the
+     format hints, figures as values (summary(slip, i) gives them by column
+     key: what was computed or imported, not re-worked by formulas), and a
+     TOTAL row under the data. */
+  var NO_TOTAL = { no: 1, id: 1, name: 1, position: 1, department: 1, newRate: 1, newRateDate: 1,
+    payPeriod: 1, bonusDetails: 1, remarks: 1 };
+  function payrollSheet(run, period, settings, summary) {
     var rows = [];
     rows.push([{ v: 'Company Name: ' + settings.company.name, t: 's', s: S.BOLD }]);
     // Row 2: the title, then above each column to fill in, what goes there.
     var title = [{ v: 'Payroll | ' + cutoffTitle(period), t: 's', s: S.BOLD }];
-    PAYROLL_COLUMNS.forEach(function (c, i) {
+    if (!summary) PAYROLL_COLUMNS.forEach(function (c, i) {
       if (FORMAT_HINTS[c.key]) title[i] = { v: FORMAT_HINTS[c.key], t: 's', s: S.NOTE };
     });
     rows.push(title);
@@ -232,17 +238,28 @@
         sssER: n(er.sss), hdmfER: n(er.pagibig), phicER: n(er.philhealth), ec: n(er.sssEC),
         remarks: { v: s.remarks || '', t: 's', s: S.INPUT }
       };
+      if (summary) {
+        var vals = summary(s, i);
+        PAYROLL_COLUMNS.forEach(function (col) { if (cells[col.key].t === 'f') cells[col.key] = n(vals[col.key]); });
+      }
       rows.push(PAYROLL_COLUMNS.map(function (col) { return cells[col.key]; }));
     });
 
-    var last = X.colName(PAYROLL_COLUMNS.length);
+    var last = X.colName(PAYROLL_COLUMNS.length), lastData = Math.max(3, rows.length);
+    if (summary && run.slips.length) {
+      rows.push(PAYROLL_COLUMNS.map(function (c, i) {
+        if (i === 2) return { v: 'TOTAL \u2014 ' + run.slips.length + ' employees', t: 's', s: S.TOTAL };
+        if (NO_TOTAL[c.key]) return { v: '', t: 's', s: S.TOTAL };
+        return { v: 'SUM(' + at[c.key] + '4:' + at[c.key] + lastData + ')', t: 'f', s: S.TOTAL };
+      }));
+    }
     return {
       name: 'Payroll',
       cols: PAYROLL_COLUMNS.map(function (c) { return c.width; }),
       rows: rows,
-      rowHeights: { 2: 46 },
+      rowHeights: summary ? {} : { 2: 46 },
       freeze: { x: 3, y: 3 },
-      autoFilter: 'A3:' + last + Math.max(3, rows.length)
+      autoFilter: 'A3:' + last + lastData
     };
   }
 
@@ -590,6 +607,7 @@
     parseFinalPay: parseFinalPay,
     toDate: finalPayDate,
     build: buildWorkbook,
+    buildSummary: function (run, period, settings, values) { return X.build([payrollSheet(run, period, settings, values)]); },
     parse: parseWorkbook,
     readCutoff: readCutoff,
     payoutFromFileName: payoutFromFileName,

@@ -253,9 +253,10 @@
         if (!Object.keys(row).some(function (k) { return row[k]; })) return;
         [people, months].forEach(function (bucket, i) {
           var key = i === 0 ? emp.id : month + '|' + emp.id;
-          var t = bucket[key] = bucket[key] || { emp: emp, month: month, cutoffs: 0,
+          var t = bucket[key] = bucket[key] || { emp: emp, month: month, cutoffs: 0, gross: 0,
             sssEE: 0, sssER: 0, ec: 0, phicEE: 0, phicER: 0, hdmfEE: 0, hdmfER: 0 };
           t.cutoffs++;
+          t.gross = E.r2(t.gross + (s.earnings.grossPay || 0));
           Object.keys(row).forEach(function (k) { t[k] = E.r2(t[k] + (row[k] || 0)); });
         });
       });
@@ -287,7 +288,7 @@
     }
   }
   function contribSum(rows) {
-    var t = { sssEE: 0, sssER: 0, ec: 0, phicEE: 0, phicER: 0, hdmfEE: 0, hdmfER: 0 };
+    var t = { gross: 0, sssEE: 0, sssER: 0, ec: 0, phicEE: 0, phicER: 0, hdmfEE: 0, hdmfER: 0 };
     rows.forEach(function (r) { Object.keys(t).forEach(function (k) { t[k] = E.r2(t[k] + r[k]); }); });
     return t;
   }
@@ -313,13 +314,15 @@
     $('#ctBody').innerHTML = data.people.map(function (t) {
       var e = t.emp;
       return '<tr><td class="sticky-col">' + esc(e.lastName + ', ' + e.firstName) + '<div class="muted" style="font-size:11px">' + esc(e.id) + '</div></td>' +
+        '<td class="num">' + plain(t.gross) + '</td>' +
         '<td>' + esc(e.sssNo || '\u2014') + '</td><td>' + esc(e.philhealthNo || '\u2014') + '</td><td>' + esc(e.pagibigNo || '\u2014') + '</td>' +
         '<td class="num">' + t.cutoffs + '</td>' +
         CONTRIB_COLS.map(function (c) { return '<td class="num' + (/total/i.test(c[0]) ? ' strong' : '') + '">' + plain(contribVal(t, c[0])) + '</td>'; }).join('') +
         '</tr>';
     }).join('') || '<tr><td colspan="18" class="muted">No contributions in this range.</td></tr>';
     var sum = contribSum(data.people);
-    $('#ctFoot').innerHTML = data.people.length ? '<tr><td>TOTAL \u2014 ' + data.people.length + ' employees</td><td></td><td></td><td></td><td></td>' +
+    $('#ctFoot').innerHTML = data.people.length ? '<tr><td>TOTAL \u2014 ' + data.people.length + ' employees</td>' +
+      '<td class="num">' + plain(sum.gross) + '</td><td></td><td></td><td></td><td></td>' +
       CONTRIB_COLS.map(function (c) { return '<td class="num">' + plain(contribVal(sum, c[0])) + '</td>'; }).join('') + '</tr>' : '';
   }
   function exportContrib() {
@@ -327,20 +330,24 @@
     var X = window.XlsxWriter, S = X.S;
     var title = 'SSS, PhilHealth and Pag-IBIG contributions \u2014 ' + state.settings.company.name + ' \u2014 ' +
       r.from + ' to ' + r.to + (r.basis === 'cutoff' ? ' (cutoff dates)' : ' (payout dates)');
-    var idHeads = ['Employee ID', 'Last name', 'First name', 'SSS no.', 'PhilHealth no.', 'Pag-IBIG no.'];
+    var idHeads = ['Employee ID', 'Last name', 'First name', 'Gross pay', 'SSS no.', 'PhilHealth no.', 'Pag-IBIG no.'];
     var sheet = function (name, list, withMonth) {
       var heads = (withMonth ? ['Month'] : []).concat(idHeads, ['Cutoffs'], CONTRIB_COLS.map(function (c) { return c[1]; }));
+      var str = function (v) { return { v: String(v || ''), t: 's' }; };
       var rows = [[{ v: title, t: 's', s: S.BOLD }], heads.map(function (h) { return { v: h, t: 's', s: S.HEAD_TAN }; })];
       list.forEach(function (t) {
         var e = t.emp;
-        rows.push((withMonth ? [t.month] : []).concat([e.id, e.lastName, e.firstName, e.sssNo, e.philhealthNo, e.pagibigNo])
-          .map(function (v) { return { v: String(v || ''), t: 's' }; })
+        rows.push((withMonth ? [str(t.month)] : []).concat([str(e.id), str(e.lastName), str(e.firstName),
+          { v: t.gross, t: 'n', s: S.NUM }, str(e.sssNo), str(e.philhealthNo), str(e.pagibigNo)])
           .concat([{ v: t.cutoffs, t: 'n', s: S.INT }])
           .concat(CONTRIB_COLS.map(function (c) { return { v: contribVal(t, c[0]), t: 'n', s: S.NUM }; })));
       });
       var sum = contribSum(list), lead = (withMonth ? 1 : 0) + idHeads.length + 1;
       var foot = [];
-      for (var i = 0; i < lead; i++) foot.push({ v: i === 0 ? 'TOTAL' : '', t: 's', s: S.TOTAL });
+      var grossAt = (withMonth ? 1 : 0) + 3;
+      for (var i = 0; i < lead; i++) {
+        foot.push(i === grossAt ? { v: sum.gross, t: 'n', s: S.TOTAL } : { v: i === 0 ? 'TOTAL' : '', t: 's', s: S.TOTAL });
+      }
       rows.push(foot.concat(CONTRIB_COLS.map(function (c) { return { v: contribVal(sum, c[0]), t: 'n', s: S.TOTAL }; })));
       return { name: name, rows: rows, cols: heads.map(function (h, i) { return i < lead ? 15 : 13; }), freeze: { x: withMonth ? 4 : 3, y: 2 } };
     };

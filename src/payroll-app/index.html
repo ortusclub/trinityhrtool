@@ -645,7 +645,8 @@
           <li><strong>Employees</strong> tab: re-import the latest <strong>201 File</strong> (start date, work email, BPI account, government numbers), or <strong>+ Add employee</strong>.</li>
           <li>Give them a <strong>monthly rate</strong>: <strong>Import salaries</strong>, or type it in. Without one they are left off the cutoff and a yellow warning names them.</li>
           <li>Check they have a <strong>TrinityHR login</strong> (User Management) with the same work email, or their payslip cannot be published to them.</li>
-          <li>Starting mid-cutoff, their basic pay and de minimis are prorated on their own; a blue note says <em>Started inside this cutoff</em>.</li>
+          <li>Starting mid-cutoff, their basic pay and de minimis are prorated on their own; a blue note says <em>Started inside this cutoff</em>. Basic = monthly ÷ 2 − daily rate × working days before the start date, where daily rate = monthly × 12 ÷ 261 (e.g. 24,000 starting Mon Feb 23 in Feb 16–28: 12,000 − 5 × 1,103.45 = 6,482.76). A last day inside a cutoff works the same way, for the days after it.</li>
+          <li>Worked somewhere else earlier the same year? Get the <strong>2316 from their previous employer</strong> and enter it on the <strong>BIR 2316</strong> tab (click their name → Previous employer: taxable compensation, tax withheld, TIN, name, address). It goes into their year-end tax and final pay; without it their annual tax is too low and their refund too high. If there was none, tick <em>No previous employer this year</em>. New hires without either are flagged <em>previous employer?</em>.</li>
         </ol>
         <h3>Each cutoff</h3>
         <ol>
@@ -752,7 +753,8 @@
         <h3>Why someone owes or gets a refund</h3>
         <ol>
           <li><strong>Owes</strong>: taxable 13th month or benefits over the ₱90,000 ceiling — no tax was withheld on them during the year — or pay that went up and down between cutoffs.</li>
-          <li><strong>Refund</strong>: cutoffs where the semi-monthly table withheld more than the year needs, e.g. after a large one-off taxable payment.</li>
+          <li><strong>Refund</strong>: cutoffs where the semi-monthly table withheld more than the year needs, e.g. after a large one-off taxable payment, or a new hire — each cutoff withholds as if they earned the full year, but the year's income is only from their start date.</li>
+          <li><strong>New hire with a previous employer this year</strong>: their taxable pay there is added to annual taxable, and the tax they withheld counts toward what is due (BIR 2316 items 22 and 25B). Enter it on the BIR 2316 tab.</li>
           <li><strong>Tax refund / adjustment posted on</strong> (13th Month &amp; Year-End tab) chooses the payout that refunds or collects it. Left on <em>Do not post — report only</em>, nothing is paid or deducted. Anyone given final pay had theirs settled then and is skipped.</li>
         </ol>
       </div>

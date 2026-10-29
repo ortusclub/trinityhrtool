@@ -1100,6 +1100,13 @@
    *   adjustment = tax withheld during the year - tax due on the annualised
    *                income. Positive means a refund to the employee.
    */
+  /** A previous employer's figures for `year`, from the 2316 a new hire brings (emp.bir). */
+  function previousEmployer(emp, year) {
+    var b = emp.bir || {};
+    if (String(b.prevYear || '') !== String(year)) return { taxable: 0, withheld: 0 };
+    return { taxable: r2(num(b.prevTaxable)), withheld: r2(num(b.prevWithheld)) };
+  }
+
   function yearEndFor(emp, year, dtrMap, settings) {
     var ye = settings.yearEnd;
     var ytd = yearToDate(emp, year, dtrMap, settings, null);
@@ -1123,9 +1130,12 @@
     var balance = r2(Math.max(0, thirteenth - ytd.thirteenthPaid));
     var addTaxable = r2(Math.max(0, taxableBenefits - ytd.thirteenthTaxedPaid));
     var taxableBalance = r2(Math.min(balance, addTaxable));
-    var annualTaxable = r2(ytd.taxableIncome + addTaxable);
+    /* A previous employer this year (new hire): their taxable pay joins the
+       annual income, and the tax they withheld counts toward what is due. */
+    var prev = previousEmployer(emp, year);
+    var annualTaxable = r2(ytd.taxableIncome + addTaxable + prev.taxable);
     var due = annualTax(annualTaxable, settings);
-    var adjustment = r2(ytd.taxWithheld - due);
+    var adjustment = r2(ytd.taxWithheld + prev.withheld - due);
     return {
       ytd: ytd,
       thirteenthMonth: thirteenth,
@@ -1143,6 +1153,8 @@
       thirteenthBalance: balance,
       thirteenthBalanceTaxable: taxableBalance,
       annualTaxableIncome: annualTaxable,
+      previousTaxable: prev.taxable,
+      previousWithheld: prev.withheld,
       annualTaxDue: due,
       taxWithheld: ytd.taxWithheld,
       adjustment: adjustment,
@@ -1196,7 +1208,8 @@
    * follow the September 2021 (ENCS) form. Taxable basic is what is left of
    * the year's taxable income once overtime, other taxable pay and the taxed
    * 13th month already paid are taken out — basic net of the contributions,
-   * which the form lists as non-taxable — so Taxable (52) equals the
+   * which the form lists as non-taxable — so Taxable (52), plus a previous
+   * employer's (22), equals the
    * annual taxable income the year-end tax is worked out on.
    */
   function bir2316For(emp, year, dtrMap, settings) {
@@ -1242,8 +1255,9 @@
       items: {
         i34: i34, i35: i35, i36: i36, i37: i37, i38: i38,
         i39: i39, i48: i48, i50: i50, i51a: i51a, i52: i52,
-        i19: r2(i38 + i52), i20: i38, i21: i52, i22: 0, i23: i52,
-        i24: ye.annualTaxDue, i25a: ye.annualTaxDue, i25b: 0, i26: ye.annualTaxDue, i27: 0, i28: ye.annualTaxDue
+        i19: r2(i38 + i52), i20: i38, i21: i52, i22: ye.previousTaxable, i23: r2(i52 + ye.previousTaxable),
+        i24: ye.annualTaxDue, i25a: r2(ye.annualTaxDue - ye.previousWithheld), i25b: ye.previousWithheld,
+        i26: ye.annualTaxDue, i27: 0, i28: ye.annualTaxDue
       },
       withheld: ye.taxWithheld,
       adjustment: ye.adjustment
@@ -1311,9 +1325,10 @@
       .map(function (c) { return { label: String(c.label).trim(), amount: r2(num(c.amount)) }; });
 
     var ytd = yearToDate(emp, taxYear, dtrMap, settings, period.payoutDate);
-    var annualTaxable = r2(ytd.taxableIncome + thirteenthTaxable + leaveTaxable);
+    var prev = previousEmployer(emp, taxYear);
+    var annualTaxable = r2(ytd.taxableIncome + thirteenthTaxable + leaveTaxable + prev.taxable);
     var due = annualTax(annualTaxable, settings);
-    var taxAdjustment = on('tax') ? r2(ytd.taxWithheld - due) : 0;
+    var taxAdjustment = on('tax') ? r2(ytd.taxWithheld + prev.withheld - due) : 0;
 
     return {
       period: period,

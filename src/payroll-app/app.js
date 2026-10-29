@@ -1771,7 +1771,19 @@
     ['localAddress', '6B Local home address'], ['localZip', '6C ZIP code'], ['foreignAddress', '6D Foreign address'],
     ['birthDate', '7 Date of birth (YYYY-MM-DD)'], ['contact', '8 Contact number']
   ];
+  // Part III and items 22 / 25B: a previous employer this year (a new hire's
+  // 2316 from them). Amounts count only for the year given.
+  var BIR_PREV = [
+    ['prevYear', 'Year of those figures (YYYY)'], ['prevTin', '16 TIN'], ['prevName', '17 Employer\u2019s name'],
+    ['prevAddress', '18 Registered address'], ['prevZip', '18A ZIP code'],
+    ['prevTaxable', '22 Taxable compensation from them', true], ['prevWithheld', '25B Tax they withheld', true]
+  ];
   function birInfo(emp) { return emp.bir || {}; }
+  /** Started this year: a previous employer's 2316 may be needed. */
+  function birNewHire(emp) {
+    var h = String(emp.dateHired || '');
+    return /^\d{4}-\d{2}-\d{2}$/.test(h) && h.slice(0, 4) === String(state.year) && h > state.year + '-01-01';
+  }
   /** What still has to be filled in before the form can be: a TIN, and the details above. */
   function birMissing(emp) {
     var m = [], b = birInfo(emp);
@@ -1780,6 +1792,7 @@
     if (!b.address) m.push('address');
     if (!b.zip) m.push('ZIP');
     if (!b.birthDate) m.push('birth date');
+    if (birNewHire(emp) && String(b.prevYear || '') !== String(state.year) && !b.noPrevious) m.push('previous employer?');
     return m;
   }
   function renderBir2316() {
@@ -1832,6 +1845,16 @@
         var v = b[fd[0]] || (fd[0] === 'contact' ? emp.phone || '' : '');
         return '<label>' + esc(fd[1]) + ' <input type="text" data-bir-field="' + fd[0] + '" data-bir-emp="' + esc(emp.id) + '" value="' + esc(v) + '"></label>';
       }).join('') + '</div>' +
+      '<h3 style="margin:4px 0 6px">Previous employer this year <span class="muted" style="font-weight:400;font-size:12px">' +
+        '(from the 2316 they bring; their taxable pay and tax withheld go into the year-end tax)</span></h3>' +
+      '<div class="form-grid" style="padding:0;margin-bottom:6px">' + BIR_PREV.map(function (fd) {
+        var v = b[fd[0]];
+        return '<label>' + esc(fd[1]) + ' <input type="text"' + (fd[2] ? ' inputmode="decimal" data-bir-amount' : '') +
+          ' data-bir-field="' + fd[0] + '" data-bir-emp="' + esc(emp.id) + '" value="' + esc(fd[2] && v ? plain(E.num(v)) : (v || '')) +
+          '" placeholder="' + (fd[0] === 'prevYear' ? String(state.year) : '') + '"></label>';
+      }).join('') + '</div>' +
+      '<label style="display:block;margin-bottom:12px;font-size:12.5px"><input type="checkbox" data-bir-noprev data-bir-emp="' + esc(emp.id) + '"' +
+        (b.noPrevious ? ' checked' : '') + '> No previous employer this year</label>' +
       '<table class="grid compact" style="width:100%"><tbody>' + BIR_ITEMS.map(function (r) {
         return '<tr><td style="width:46px">' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="num">' + (it[r[2]] ? plain(it[r[2]]) : '-') + '</td></tr>';
       }).join('') + '<tr><td colspan="3" class="muted" style="font-size:11.5px">Items 29–33 (minimum wage earner), 40–47, 49 and 51B do not apply and are blank. ' +
@@ -3565,14 +3588,22 @@
     $('#btnBirExport').addEventListener('click', exportBir2316);
     $('#birCert').addEventListener('change', function (ev) {
       var el = ev.target;
-      if (!el.dataset.birField) return;
+      if (!el.dataset.birField && el.dataset.birNoprev === undefined) return;
       var emp = state.employees.filter(function (e) { return e.id === el.dataset.birEmp; })[0];
       if (!emp) return;
       emp.bir = emp.bir || {};
-      var v = String(el.value).trim();
-      if (v) emp.bir[el.dataset.birField] = v; else delete emp.bir[el.dataset.birField];
+      if (el.dataset.birNoprev !== undefined) {
+        if (el.checked) emp.bir.noPrevious = true; else delete emp.bir.noPrevious;
+      } else {
+        var v = String(el.value).trim();
+        if (el.dataset.birAmount !== undefined && v) v = parseAmount(v);
+        if (v !== '' && v !== 0) emp.bir[el.dataset.birField] = v; else delete emp.bir[el.dataset.birField];
+        // Amounts entered without a year are this year's.
+        if (/^prev(Taxable|Withheld)$/.test(el.dataset.birField) && v && !emp.bir.prevYear) emp.bir.prevYear = String(state.year);
+      }
       Store.saveEmployees(state.employees);
       renderBir2316();
+      openBir2316(emp.id);
     });
     $('#btnCloseBir').addEventListener('click', function () { $('#birModal').classList.add('hidden'); });
     $('#runBody').addEventListener('click', function (ev) {

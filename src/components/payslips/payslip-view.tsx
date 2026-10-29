@@ -189,5 +189,7 @@ function accountLogo(account: string | undefined) {
     return { src: "/trinity-logo-black.png", alt: "Trinity", width: 808, height: 153, className: "h-7" };
   if (/ortus/i.test(account ?? ""))
     return { src: "/ortus-logo-black.png", alt: "The Ortus Club", width: 769, height: 399, className: "h-14" };
+  if (/apex/i.test(account ?? ""))
+    return { src: "/apex-logo.png", alt: "APEX Strategy", width: 91, height: 90, className: "h-12" };
   return null;
 }

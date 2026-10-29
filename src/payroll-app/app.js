@@ -788,54 +788,38 @@
   }
 
   /* ----------------------------- CSV export ----------------------------- */
+  /** One slip's figures by template column key, as computed or imported. */
+  function slipValues(s, i) {
+    var e = s.earnings, c = s.contributions, er = c.employer, d = s.dtr, t = s.tax, p = s.postTax;
+    return {
+      no: i + 1, id: s.employee.id, name: s.employee.lastName + ', ' + s.employee.firstName,
+      position: s.employee.position, department: s.employee.department,
+      rate: s.rates.monthly, payPeriod: s.period.payPeriodNo,
+      regularPay: s.rates.semiMonthly, otHours: d.otHours, otPay: e.otPay,
+      ndHours: d.ndHours, ndPay: e.ndPay,
+      deMinimis: E.r2(e.deMinimis + e.deMinimisDeduction), quarterlyBonus: e.quarterlyBonus,
+      bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, sssLoan: p.sssLoan, classPass: p.classPass,
+      travel: e.transportationGiven, absentDays: d.absentDays + d.unpaidLeaveDays,
+      absenceDeduction: e.absenceDeduction, lateMinutes: d.lateMinutes,
+      lateDeduction: e.lateDeduction, undertimeMinutes: d.undertimeMinutes,
+      undertimeDeduction: e.undertimeDeduction, prorationDeduction: e.prorationDeduction,
+      dmDeduction: e.deMinimisDeduction, travelDeduction: e.travelDeduction,
+      gross: e.grossPay, sss: c.sss, phic: c.philhealth, hdmf: c.pagibig,
+      afterMandatories: t.incomeAfterMandatories, netTaxable: t.taxableIncome, tax: t.withholding,
+      tendo: p.tendoPay, hmo: p.hmo,
+      other: E.r2(p.otherDeduction + s.totalOtherDeductions - p.reimbursement),
+      net: s.totals.netPay, sssER: er.sss, hdmfER: er.pagibig, phicER: er.philhealth, ec: er.sssEC,
+      remarks: s.remarks || ''
+    };
+  }
+
+  /* The payroll summary: the cutoff as the payroll template lays it out,
+     with its colours, every figure as computed (or as the imported file has
+     it), and a TOTAL row. */
   function exportCsv() {
-    var cols = window.PayrollTemplate.COLUMNS;
-    var head = cols.map(function (c) { return c.head; });
-    var rows = state.run.slips.map(function (s, i) {
-      var e = s.earnings, c = s.contributions, er = c.employer, d = s.dtr, t = s.tax, p = s.postTax;
-      var v = {
-        no: i + 1, id: s.employee.id, name: s.employee.lastName + ', ' + s.employee.firstName,
-        position: s.employee.position, department: s.employee.department,
-        rate: s.rates.monthly, payPeriod: s.period.payPeriodNo,
-        regularPay: s.rates.semiMonthly, otHours: d.otHours, otPay: e.otPay,
-        ndHours: d.ndHours, ndPay: e.ndPay,
-        deMinimis: E.r2(e.deMinimis + e.deMinimisDeduction), quarterlyBonus: e.quarterlyBonus,
-        bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, sssLoan: p.sssLoan, classPass: p.classPass,
-        travel: e.transportationGiven, absentDays: d.absentDays + d.unpaidLeaveDays,
-        absenceDeduction: e.absenceDeduction, lateMinutes: d.lateMinutes,
-        lateDeduction: e.lateDeduction, undertimeMinutes: d.undertimeMinutes,
-        undertimeDeduction: e.undertimeDeduction, prorationDeduction: e.prorationDeduction,
-        dmDeduction: e.deMinimisDeduction, travelDeduction: e.travelDeduction,
-        gross: e.grossPay, sss: c.sss, phic: c.philhealth, hdmf: c.pagibig,
-        afterMandatories: t.incomeAfterMandatories, netTaxable: t.taxableIncome, tax: t.withholding,
-        tendo: p.tendoPay, hmo: p.hmo,
-        other: E.r2(p.otherDeduction + s.totalOtherDeductions - p.reimbursement),
-        net: s.totals.netPay, sssER: er.sss, hdmfER: er.pagibig, phicER: er.philhealth, ec: er.sssEC,
-        remarks: s.remarks || ''
-      };
-      return cols.map(function (c) { return v[c.key]; });
-    });
-
-    var meta = [
-      ['Company Name: ' + state.settings.company.name],
-      ['Payroll | ' + window.PayrollTemplate.cutoffTitle(state.period)]
-    ];
-
-    var csv = meta.concat([head]).concat(rows).map(function (r) {
-      return r.map(function (cell) {
-        var v = cell === null || cell === undefined ? '' : String(cell);
-        return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
-      }).join(',');
-    }).join('\n');
-
-    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'payroll-summary-' + state.period.id + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
+    var blob = window.PayrollTemplate.buildSummary(state.run, state.period, state.settings, slipValues);
+    var name = 'Payroll Summary — ' + state.settings.company.name + ' — ' + state.period.id + '.xlsx';
+    window.XlsxWriter.download(blob, name.replace(/[\\/:*?"<>|]/g, '-'));
   }
 
 

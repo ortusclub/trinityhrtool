@@ -1118,14 +1118,15 @@
     var ytd = yearToDate(emp, year, dtrMap, settings, null);
     var thirteenth = r2(ytd.basicEarned / (ye.thirteenthMonthDivisor || 12));
     /* The 2316 guide (Japheth, 29 Oct 2026), item 34: the 13th month, the
-       anniversary bonus (ex milestones), the quarterly bonus and the
-       year-end bonus — the full amount for a full year, pro rata by months
-       worked otherwise, paid with the 13th month — share the yearly exempt
-       ceiling. Transport is de minimis (item 35), outside it. Whatever they
-       pass the ceiling by is taxable (item 48), taken off the 13th month
-       first. */
+       anniversary bonus (ex milestones) and the quarterly bonus share the
+       yearly exempt ceiling. Transport is de minimis (item 35), outside it.
+       Whatever they pass the ceiling by is taxable (item 48), taken off the
+       13th month first. */
+    var benefits = r2(thirteenth + ytd.companyBonus + ytd.quarterlyBonus);
+    /* The year-end non-taxable bonus is paid with the 13th month: the full
+       amount for a full year, pro rata by months worked otherwise. It is
+       outside the ceiling and never taxed (item 35). */
     var yearEndBonus = r2(num(ye.yearEndBonus) * ytd.monthsWorked / 12);
-    var benefits = r2(thirteenth + ytd.companyBonus + ytd.quarterlyBonus + yearEndBonus);
     var taxableBenefits = r2(Math.max(0, benefits - ye.thirteenthMonthExemption));
     var taxableThirteenth = r2(Math.min(thirteenth, taxableBenefits));
     /* What YTD taxable income already holds of these: the taxed part of 13th
@@ -1251,8 +1252,9 @@
     /* Items as the September 2021 (ENCS) form numbers them, filled by the
        company's 2316 guide (29 Oct 2026):
          34  13th month, anniversary bonus (ex milestones), quarterly bonus
-             (and the year-end bonus) up to the ceiling
-         35  de minimis, PTO, transport     36  employee contributions
+             up to the ceiling
+         35  de minimis, PTO, transport (and the year-end non-taxable bonus)
+                                            36  employee contributions
          37  blank                          39  basic less contributions
          45  commissions                    48  the excess over the ceiling
          50  overtime                       51  night differential and holiday pay
@@ -1262,7 +1264,7 @@
     var i52 = r2(ye.annualTaxableIncome - ye.previousTaxable);
     var i39 = r2(i52 - i45 - i48 - i50 - i51);
     var i34 = r2(ye.thirteenthExempt);
-    var i35 = r2(ytd.deMinimis + ytd.transport + pto);
+    var i35 = r2(ytd.deMinimis + ytd.transport + pto + ye.yearEndBonus);
     var i36 = r2(mand), i37 = 0;
     var i38 = r2(i34 + i35 + i36 + i37);
     var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };

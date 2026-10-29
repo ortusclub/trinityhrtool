@@ -2643,7 +2643,6 @@
         line('<em>Exempt ceiling — shared (BIR 2316 item 34; transport is de minimis, outside it)</em>', '') +
         line('Quarterly bonus this year (taxed in the cutoffs)', plain(y.quarterlyBonus)) +
         line('Ex milestones (anniversary bonus) this year', plain(y.companyBonus)) +
-        line('Year-end bonus', plain(y.yearEndBonus)) +
         line('13th month', plain(y.thirteenthMonth)) +
         line('Total', plain(y.benefits), 'strong') +
         line('Less the ceiling', '−' + plain(ceiling)) +

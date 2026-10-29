@@ -689,6 +689,35 @@
         </ol>
       </div>
     </div>
+    <div class="card">
+      <div class="card-head"><h2>Year-end tax: how the annual figures are worked out</h2>
+        <p class="hint" style="display:block">The <strong>13th Month &amp; Year-End</strong> tab. Each cutoff withholds tax with the
+        <strong>semi-monthly</strong> table — an estimate. At year-end the <strong>annual</strong> table settles the real tax for the
+        year (the BIR year-end adjustment, "annualization"), and the difference is refunded or collected.</p></div>
+      <div class="process">
+        <h3>The columns, with an example (De La Paz, Mara)</h3>
+        <ol>
+          <li><strong>YTD taxable income</strong> — every cutoff paid this year, its NET TAXABLE AMOUNT added up (taxable pay after SSS, PhilHealth and Pag-IBIG, less de minimis and other non-taxable pay). Mara: 1,629,895.17.</li>
+          <li><strong>Taxable</strong> — the part of the 13th month, transport and ex milestones above the ₱90,000 tax-free ceiling. Mara: 80,266.67.</li>
+          <li><strong>Annual taxable</strong> — YTD taxable income + Taxable. It is <em>income</em>, not a sum of taxes. Mara: 1,710,161.84.</li>
+          <li><strong>Annual tax due</strong> — the BIR <strong>annual</strong> table on annual taxable. Mara is over ₱800,000 to ₱2,000,000, so ₱102,500 + 25% of the excess over ₱800,000: 102,500 + 25% × 910,161.84 = <strong>330,040.46</strong>.</li>
+          <li><strong>Tax withheld</strong> — the tax deducted each cutoff (semi-monthly table), added up. Mara: 309,972.60.</li>
+          <li><strong>Refund / (Due)</strong> — tax withheld − annual tax due. Positive: refunded to the employee. In brackets: still owed by the employee. Mara: (20,067.86).</li>
+        </ol>
+        <h3>The two tables</h3>
+        <ol>
+          <li><strong>Semi-monthly</strong> (each cutoff's TAX, in the template and Payroll Run): 0% up to 10,417; 15% over 10,417; 20% over 16,667; 25% over 33,333; 30% over 83,333; 35% over 333,333.</li>
+          <li><strong>Annual</strong> (year-end, Settings &amp; Rules): 0% up to 250,000; 15% over 250,000; 20% over 400,000; 25% over 800,000; 30% over 2,000,000; 35% over 8,000,000.</li>
+          <li>The semi-monthly table is the annual one ÷ 24, so someone with the same taxable pay every cutoff ends the year with withheld ≈ due (a peso or two of rounding).</li>
+        </ol>
+        <h3>Why someone owes or gets a refund</h3>
+        <ol>
+          <li><strong>Owes</strong>: taxable 13th month or benefits over the ₱90,000 ceiling — no tax was withheld on them during the year — or pay that went up and down between cutoffs.</li>
+          <li><strong>Refund</strong>: cutoffs where the semi-monthly table withheld more than the year needs, e.g. after a large one-off taxable payment.</li>
+          <li><strong>Tax refund / adjustment posted on</strong> (13th Month &amp; Year-End tab) chooses the payout that refunds or collects it. Left on <em>Do not post — report only</em>, nothing is paid or deducted. Anyone given final pay had theirs settled then and is skipped.</li>
+        </ol>
+      </div>
+    </div>
   </section>
 
   <section class="panel hidden" id="tab-settings">

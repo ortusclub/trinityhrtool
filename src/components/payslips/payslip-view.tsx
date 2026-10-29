@@ -1,6 +1,7 @@
 import type { PayslipLine, StoredPayslip } from "@/types/database";
 import type { PayslipSettings } from "@/lib/payslips";
 import { formatDate } from "@/lib/utils";
+import type { PayslipDetails } from "@/lib/payslip-details";
 
 /** An amount in the payslip's currency, two decimals: ₱1,234.50, €980.00. */
 export function money(n: number | string | null | undefined, currency = "PHP"): string {
@@ -23,10 +24,13 @@ export function PayslipView({
   payslip,
   employeeName,
   settings,
+  details,
 }: {
   payslip: StoredPayslip;
   employeeName: string;
   settings: PayslipSettings;
+  /** Trinity payslips: account and government numbers (payslipDetails). */
+  details?: PayslipDetails | null;
 }) {
   const { lines, currency } = payslip;
   const fmt = (n: number | null | undefined) => money(n, currency);
@@ -60,7 +64,19 @@ export function PayslipView({
         {settings.showEmployeeCode && <Field label="Employee code" value={lines.employee?.code || "—"} />}
         <Field label="Payroll period" value={payslip.period_label} />
         <Field label="Payout date" value={formatDate(payslip.payout_date)} />
-        {settings.showBranch && lines.employee?.branch && <Field label="Branch" value={lines.employee.branch} />}
+        {details?.account ? (
+          <Field label="Account" value={details.account} />
+        ) : (
+          settings.showBranch && lines.employee?.branch && <Field label="Branch" value={lines.employee.branch} />
+        )}
+        {details && (
+          <>
+            <Field label="SSS no." value={details.sss || "—"} />
+            <Field label="PhilHealth no." value={details.philhealth || "—"} />
+            <Field label="Pag-IBIG no." value={details.pagibig || "—"} />
+            <Field label="TIN" value={details.tin || "—"} />
+          </>
+        )}
         {settings.showExtraDetails && lines.employee?.personal_no && (
           <Field label="Personal no." value={lines.employee.personal_no} />
         )}

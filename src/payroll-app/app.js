@@ -85,7 +85,7 @@
     var sel = $('#periodSelect');
     sel.innerHTML = state.periods.map(function (p) {
       // Named by the cutoff, as the payroll files are: "January 1 - 15, 2026".
-      return '<option value="' + p.id + '">' + esc(window.PayrollTemplate.cutoffTitle(p)) + '</option>';
+      return '<option value="' + p.id + '">' + esc(window.PayrollTemplate.cutoffTitle(p) + periodTag(p.id)) + '</option>';
     }).join('');
 
     var target = keepId && state.periods.some(function (p) { return p.id === keepId; })
@@ -162,7 +162,8 @@
      shown, to be entered by hand. */
   var otNd = { done: {} };
   function syncOtNd(period) {
-    if (otNd.done[period.id] || E.isPostedPeriod(state.dtr, period.id)) return;
+    // Paid cutoffs stay as they were paid.
+    if (otNd.done[period.id] || E.isPostedPeriod(state.dtr, period.id) || paidOf(period.id)) return;
     otNd.done[period.id] = 'loading';
     psApi('ot-nd?from=' + period.start + '&to=' + period.end).then(function (data) {
       otNd.done[period.id] = true;
@@ -335,7 +336,52 @@
       }).join('') + '</ul></div>';
   }
 
+  /* Whether a cutoff has been processed: marked paid here (shared, in
+     settings.processed) and its payslips published to TrinityHR (the
+     payslip batch named by the cutoff id). Processed = both. */
+  var batchStatus = { byId: null, loading: false };
+  function loadBatchStatus(force) {
+    if ((batchStatus.byId && !force) || batchStatus.loading) return;
+    batchStatus.loading = true;
+    psApi('payslips').then(function (d) {
+      batchStatus.byId = {};
+      (d.batches || []).forEach(function (b) { batchStatus.byId[b.id] = b; });
+      batchStatus.loading = false;
+      renderPeriodMeta();
+      tagPeriodOptions();
+    }).catch(function () { batchStatus.loading = false; batchStatus.byId = batchStatus.byId || {}; });
+  }
+  function paidOf(id) { return (state.settings.processed || {})[id] || null; }
+  function batchOf(id) { return batchStatus.byId ? batchStatus.byId[id] || null : null; }
+  function periodTag(id) {
+    var paid = paidOf(id), b = batchOf(id), pub = b && b.published_at;
+    return paid && pub ? '  \u2713 processed' : paid ? '  \u2713 paid' : pub ? '  \u2713 published' : '';
+  }
+  function tagPeriodOptions() {
+    $$('#periodSelect option').forEach(function (o) {
+      var p = state.periods.filter(function (x) { return x.id === o.value; })[0];
+      if (p) o.textContent = window.PayrollTemplate.cutoffTitle(p) + periodTag(p.id);
+    });
+  }
+  function processedHtml() {
+    var id = state.period.id, paid = paidOf(id), b = batchOf(id);
+    var pub = b && b.published_at;
+    var when = function (t) { return E.fmtShort(new Date(t)) + ' ' + String(new Date(t).getFullYear()); };
+    var slips = !batchStatus.byId ? '<span class="pill">Payslips: checking…</span>'
+      : pub ? '<span class="pill rf" title="' + b.count + ' payslips">Payslips published ' + esc(when(b.published_at)) + '</span>'
+      : b ? '<span class="pill spc" title="' + b.count + ' payslips">Payslips drafted, not published</span>'
+      : '<span class="pill reg">Payslips not created</span>';
+    var paidPill = paid
+      ? '<span class="pill rf">Paid \u2014 marked ' + esc(when(paid.at)) + (paid.by ? ' by ' + esc(paid.by) : '') + '</span> ' +
+        '<button class="link-btn" type="button" data-mark-paid="0">undo</button>'
+      : '<button class="btn" type="button" data-mark-paid="1">Mark as paid</button>';
+    return '<div class="processed-row">' +
+      (paid && pub ? '<span class="pill processed">\u2713 Processed</span>' : '<span class="pill">Not processed</span>') +
+      ' ' + paidPill + ' ' + slips + '</div>';
+  }
+
   function renderPeriodMeta() {
+    loadBatchStatus();
     var wd = E.workingDaysInPeriod(state.period, state.settings);
     var halfLabel = 'Pay period ' + state.period.payPeriodNo;
     $('#periodMeta').innerHTML =
@@ -346,7 +392,7 @@
         var sent = (Store.loadTrinity().sent || {})[state.period.id];
         return sent ? ' &nbsp;·&nbsp; <span class="pill rf" title="' + esc(sent.saved + ' payslips') + '">Sent to TrinityHR ' +
           esc(E.fmtShort(new Date(sent.at))) + '</span>' : '';
-      })();
+      })() + processedHtml();
   }
 
   function renderStats() {
@@ -3719,6 +3765,20 @@
     });
 
     /* ---- period bar ---- */
+    $('#periodMeta').addEventListener('click', function (ev) {
+      var btn = ev.target.closest('[data-mark-paid]');
+      if (!btn) return;
+      var all = state.settings.processed = state.settings.processed || {};
+      if (btn.dataset.markPaid === '1') {
+        all[state.period.id] = { at: new Date().toISOString() };
+      } else {
+        delete all[state.period.id];
+      }
+      Store.saveSettings(state.settings);
+      renderPeriodMeta();
+      tagPeriodOptions();
+    });
+
     $('#periodSelect').addEventListener('change', function () {
       var id = this.value;
       state.period = state.periods.filter(function (p) { return p.id === id; })[0];

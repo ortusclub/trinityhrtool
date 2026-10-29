@@ -47,6 +47,8 @@
     { head: 'QUARTERLY BONUS TAXABLE', key: 'quarterlyBonus', input: 'quarterlyBonus', width: 12 },
     // What the bonus is for, printed under it on the payslip.
     { head: 'QUARTERLY BONUS DETAILS', key: 'bonusDetails', input: 'bonusDetails', width: 28 },
+    // Taxable; BIR 2316 item 45.
+    { head: 'COMMISSION', key: 'commission', input: 'commission', width: 12, alias: ['COMMISSIONS'] },
     // Back pay of a backdated raise (worked out on the site from the new rate
     // and its date); older files' salary adjustment column reads into it.
     { head: 'SALARY ADJ (BACK PAY)', key: 'salaryAdj', width: 13,
@@ -92,6 +94,7 @@
     newRate: 'monthly, e.g. 45,000.00', newRateDate: 'date, e.g. 2026-09-15',
     otHours: 'hours, e.g. 2.5', ndHours: 'hours, e.g. 1.5',
     quarterlyBonus: 'amount, e.g. 5,000.00', bonusDetails: 'text; ";" between items',
+    commission: 'amount, e.g. 5,000.00',
     travel: 'amount, e.g. 800.00', absentDays: 'days, e.g. 1 or 0.5',
     lateMinutes: 'minutes, e.g. 15', undertimeMinutes: 'minutes, e.g. 30',
     travelDeduction: 'amount, e.g. 200.00', tendo: 'amount, e.g. 1,000.00', hmo: 'amount, e.g. 1,000.00',
@@ -198,6 +201,7 @@
         deMinimis: n(e.deMinimisAuto.full),
         quarterlyBonus: inp(e.quarterlyBonus),
         bonusDetails: { v: e.quarterlyBonusDetails || '', t: 's', s: S.INPUT },
+        commission: inp(e.commission),
         salaryAdj: n(backPay),
         travel: inp(e.transportationGiven),
         absentDays: inp(d.absentDays + d.unpaidLeaveDays),
@@ -210,7 +214,7 @@
         dmDeduction: n(e.deMinimisDeduction),
         travelDeduction: inp(e.travelDeduction),
         gross: f(C('regularPay') + '+' + C('otPay') + '+' + C('ndPay') + '+' + C('deMinimis') + '+' +
-          C('quarterlyBonus') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
+          C('quarterlyBonus') + '+' + C('commission') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
           C('lateDeduction') + '-' + C('undertimeDeduction') + '-' + C('prorationDeduction') + '-' +
           C('dmDeduction') + '-' + C('travelDeduction') + (extraGross ? '+' + extraGross : '')),
         sss: n(c.sss), phic: n(c.philhealth), hdmf: n(c.pagibig),

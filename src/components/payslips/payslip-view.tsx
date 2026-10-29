@@ -2,6 +2,7 @@ import type { PayslipLine, StoredPayslip } from "@/types/database";
 import type { PayslipSettings } from "@/lib/payslips";
 import { formatDate } from "@/lib/utils";
 import type { PayslipDetails } from "@/lib/payslip-details";
+import Image from "next/image";
 
 /** An amount in the payslip's currency, two decimals: ₱1,234.50, €980.00. */
 export function money(n: number | string | null | undefined, currency = "PHP"): string {
@@ -52,6 +53,16 @@ export function PayslipView({
     <div className="rounded-xl border border-gray-200 bg-white p-6 print:border-0 print:p-0">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <div>
+          {/trinity/i.test(company.name ?? "") && (
+            <Image
+              src="/trinity-logo-black.png"
+              alt="Trinity"
+              width={808}
+              height={153}
+              className="mb-2 h-7 w-auto"
+              priority
+            />
+          )}
           <p className="font-display text-lg text-gray-900">
             {company.name ?? "Trinity Outsourcing Solutions Inc."}
           </p>

@@ -761,6 +761,48 @@
         </ol>
       </div>
     </div>
+    <div class="card">
+      <div class="card-head"><h2>The ₱90,000 ceiling, simply</h2>
+        <p class="hint" style="display:block">Every employee has <strong>₱90,000 a year tax-free</strong> for the 13th month and other benefits (BIR 2316 item 34). Anything above it is taxed (item 48).</p></div>
+      <div class="process">
+        <h3>What uses the ₱90,000</h3>
+        <ol>
+          <li>13th month</li>
+          <li>Anniversary bonus (EX MILESTONES)</li>
+          <li>Quarterly bonus</li>
+          <li>Year-end non-taxable bonus (₱3,000 for a full year)</li>
+          <li><em>Not</em> in it: de minimis, PTO and transport allowance — always tax-free (item 35). Commission, OT, night differential and holiday pay — always taxable (items 45, 50, 51).</li>
+        </ol>
+        <h3>Example</h3>
+        <ol>
+          <li>13th month ₱40,000 + anniversary bonus ₱10,000 = ₱50,000 used. ₱40,000 of the ceiling left.</li>
+          <li>Quarterly bonus ₱60,000: ₱40,000 fills the rest of the ceiling (tax-free), <strong>₱20,000 is taxed</strong>.</li>
+          <li>Total: 40,000 + 10,000 + 60,000 = 110,000 − 90,000 = <strong>₱20,000 taxable</strong>. (With the ₱3,000 year-end bonus too: 113,000 − 90,000 = ₱23,000.)</li>
+        </ol>
+        <h3>When the tax happens</h3>
+        <ol>
+          <li><strong>In the cutoff</strong>: the quarterly bonus is taxed in full, as in the payroll files — the year's 13th month and bonuses are not known yet. In the example, tax is withheld on all ₱60,000.</li>
+          <li><strong>At year-end</strong> (13th Month &amp; Year-End tab): the ₱60,000 is taken back out of the year's taxable income and only the ₱20,000 over the ceiling is added. The tax withheld on the other ₱40,000 comes back in the year-end refund.</li>
+          <li>Anniversary bonus and 13th month are not taxed in the cutoff; if they alone pass ₱90,000, the excess is taxed at year-end (or in the 13th month payout).</li>
+        </ol>
+        <h3>BIR 2316 — step by step</h3>
+        <ol>
+          <li>Import every cutoff's payroll file for the year (Payroll Run), including the 13th month payout. Commission goes in the <strong>COMMISSION</strong> column, quarterly bonus in <strong>QUARTERLY BONUS TAXABLE</strong>, anniversary bonus in <strong>EX MILESTONES</strong>.</li>
+          <li>Settings &amp; Rules → Company: check the employer TIN, registered address and ZIP (items 12–14A).</li>
+          <li>Employees tab (201 File): fix any TIN flagged on the BIR 2316 tab (item 3).</li>
+          <li>BIR 2316 tab: click each flagged name and fill RDO, registered address, ZIP and birth date (items 5–7).</li>
+          <li>New hires this year: enter the previous employer's 2316 — TIN, name, address, taxable compensation (item 22) and tax withheld (item 25B) — or tick <em>No previous employer this year</em>.</li>
+          <li>13th Month &amp; Year-End tab: check the year-end tax, then choose the payout that posts the refund / (due).</li>
+          <li>BIR 2316 tab: review the items — 34 (max ₱90,000), 35, 36, 39, 45, 48, 50, 51, 52 and 19–28 — then <strong>Export</strong> the .xlsx to fill the forms.</li>
+        </ol>
+        <h3>Where each item comes from</h3>
+        <ol>
+          <li><strong>19</strong> = 38 + 52 · <strong>20</strong> = 38 · <strong>21</strong> = 52 · <strong>22</strong> previous employer · <strong>23</strong> = 21 + 22 · <strong>24</strong> tax due · <strong>25A</strong> present employer, <strong>25B</strong> previous · <strong>26</strong> = 25A + 25B · <strong>27</strong> blank · <strong>28</strong> = 26 + 27.</li>
+          <li><strong>34</strong> 13th month + anniversary + quarterly bonus (max ₱90,000) · <strong>35</strong> de minimis + PTO + transport · <strong>36</strong> employee SSS, PhilHealth, Pag-IBIG · <strong>37</strong> blank · <strong>38</strong> = 34 to 37.</li>
+          <li><strong>39</strong> basic pay less contributions · <strong>45</strong> commissions · <strong>48</strong> excess over ₱90,000 · <strong>50</strong> OT · <strong>51</strong> night differential and holiday pay · <strong>52</strong> = 39 to 51. Items 29–33, 40–44, 46, 47 and 49 are not applicable.</li>
+        </ol>
+      </div>
+    </div>
   </section>
 
   <section class="panel hidden" id="tab-settings">

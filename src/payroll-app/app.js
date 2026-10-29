@@ -242,6 +242,16 @@
     });
     return out.sort(function (a, b) { return a.start < b.start ? -1 : 1; });
   }
+  /** People matching the search box: every word in name, ID, email, company or a government number. */
+  function contribMatch(list) {
+    var words = String(($('#ctSearch') || {}).value || '').toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return list;
+    return list.filter(function (t) {
+      var e = t.emp, text = [e.lastName, e.firstName, e.id, e.email, e.company, e.department, e.sssNo,
+        e.philhealthNo, e.pagibigNo].join(' ').toLowerCase();
+      return words.every(function (w) { return text.indexOf(w) !== -1; });
+    });
+  }
   function contribData(from, to, basis) {
     var people = {}, months = {}, periods = contribPeriods(from, to, basis);
     periods.forEach(function (p) {
@@ -264,8 +274,8 @@
     var byName = function (a, b) { return (a.emp.lastName + a.emp.firstName).localeCompare(b.emp.lastName + b.emp.firstName); };
     return {
       periods: periods,
-      people: Object.keys(people).map(function (k) { return people[k]; }).sort(byName),
-      months: Object.keys(months).map(function (k) { return months[k]; })
+      people: contribMatch(Object.keys(people).map(function (k) { return people[k]; }).sort(byName)),
+      months: contribMatch(Object.keys(months).map(function (k) { return months[k]; }))
         .sort(function (a, b) { return a.month === b.month ? byName(a, b) : a.month < b.month ? -1 : 1; })
     };
   }
@@ -320,7 +330,7 @@
         '<td class="num">' + t.cutoffs + '</td>' +
         CONTRIB_COLS.map(function (c) { return '<td class="num' + (/total/i.test(c[0]) ? ' strong' : '') + '">' + plain(contribVal(t, c[0])) + '</td>'; }).join('') +
         '</tr>';
-    }).join('') || '<tr><td colspan="18" class="muted">No contributions in this range.</td></tr>';
+    }).join('') || '<tr><td colspan="19" class="muted">' + ($('#ctSearch').value.trim() ? 'No one matches the search.' : 'No contributions in this range.') + '</td></tr>';
     var sum = contribSum(data.people);
     $('#ctFoot').innerHTML = data.people.length ? '<tr><td>TOTAL \u2014 ' + data.people.length + ' employees</td>' +
       '<td class="num">' + plain(sum.gross) + '</td><td></td><td></td><td></td><td></td>' +
@@ -3919,6 +3929,7 @@
 
   function wire() {
     ['#ctFrom', '#ctTo', '#ctBasis'].forEach(function (s) { $(s).addEventListener('change', renderContrib); });
+    $('#ctSearch').addEventListener('input', renderContrib);
     $('#btnCtExport').addEventListener('click', exportContrib);
     $('#tabs').addEventListener('click', function (ev) {
       var t = ev.target.closest('.tab');

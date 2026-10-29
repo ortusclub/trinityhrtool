@@ -607,8 +607,7 @@
         <div>
           <h2>SSS, PhilHealth &amp; Pag-IBIG contributions</h2>
           <p class="hint" style="display:block">Employee (EE) and employer (ER) shares for every cutoff in the range, as
-            each cutoff computed them (or as its payroll file has them). <strong>Payout date</strong> counts the cutoffs paid
-            in the range; <strong>Cutoff dates</strong> the cutoffs worked wholly inside it. The export has a sheet by employee
+            each cutoff computed them (or as its payroll file has them). <strong>Month worked</strong> (the default) counts the cutoffs worked in the range — the month contributions are remitted for: September 16 - 30 is September even though it is paid October 10. <strong>Payout date</strong> counts the cutoffs paid in the range instead. The export has a sheet by employee
             and one by month, each with a TOTAL row. A search narrows the table, its TOTAL and the export to the people it matches.</p>
           <p class="hint" style="display:block" id="ctCutoffs"></p>
         </div>
@@ -617,7 +616,7 @@
       <div class="form-grid" style="padding:0 20px 12px">
         <label>From <input type="date" id="ctFrom"></label>
         <label>To <input type="date" id="ctTo"></label>
-        <label>Dates are <select id="ctBasis"><option value="payout">Payout date</option><option value="cutoff">Cutoff dates</option></select></label>
+        <label>Dates are <select id="ctBasis"><option value="cutoff">Month worked (contribution month)</option><option value="payout">Payout date</option></select></label>
         <label>Search <input type="search" id="ctSearch" placeholder="Name, ID, email, SSS / PhilHealth / Pag-IBIG no."></label>
       </div>
       <div class="table-scroll" style="padding:0 20px 18px">

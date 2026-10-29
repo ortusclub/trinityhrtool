@@ -607,20 +607,27 @@
             Certificate of Compensation Payment / Tax Withheld for each employee on this payroll in the year
             (change the year on Payroll Run). Figures are the cutoffs paid in the year plus the year's 13th month
             and benefits, as on the 13th Month &amp; Year-End tab, so Taxable (item 52) is the annual taxable income
-            and Tax due (item 24) the annual tax; 25A on the form is the tax withheld as adjusted at year-end.
-            The certificate follows BIR Form 2316, September 2021 (ENCS). Click a name for the certificate to print; the export has every
-            item for everyone. The 13th month and tax refund are included as due for the year, whether or not
-            they have been posted yet.
+            and Tax due (item 24) the annual tax; 25A is the tax withheld as adjusted at year-end. The columns are
+            the items of BIR Form 2316 (September 2021 ENCS). Click a name to enter what payroll does not have
+            (RDO code, addresses, ZIP, date of birth); rows still missing something say so. The export has every
+            detail and item for everyone. The 13th month and tax refund are included as due for the year, whether
+            or not they have been posted yet.
           </p>
+          <p class="hint" style="display:block" id="birEmployer"></p>
         </div>
         <button class="btn ghost" id="btnBirExport" type="button">Export all (.xlsx)</button>
       </div>
       <div class="table-scroll" style="padding:0 20px 18px">
         <table class="grid compact">
           <thead><tr>
-            <th>Employee</th><th>TIN</th><th>Period</th>
-            <th class="num">Gross (19)</th><th class="num">Non-taxable (38)</th><th class="num">Taxable (52)</th>
-            <th class="num">Tax due (24)</th><th class="num">Withheld so far</th><th class="num">Refund / (due)</th>
+            <th>Employee (4)</th><th>TIN (3)</th><th>RDO (5)</th><th>Birth date (7)</th><th>Address (6)</th><th>ZIP (6A)</th><th>Period (2)</th>
+            <th class="num" title="13th month pay and other benefits">34</th><th class="num" title="De minimis benefits">35</th>
+            <th class="num" title="SSS, PHIC, Pag-IBIG (employee share)">36</th><th class="num" title="Salaries and other forms of compensation">37</th>
+            <th class="num" title="Total non-taxable">38</th><th class="num" title="Basic salary">39</th>
+            <th class="num" title="Taxable 13th month benefits">48</th><th class="num" title="Overtime pay">50</th>
+            <th class="num" title="Other taxable income">51A</th><th class="num" title="Total taxable">52</th>
+            <th class="num" title="Gross compensation">19</th><th class="num" title="Tax due">24</th>
+            <th class="num" title="Taxes withheld as adjusted">25A</th><th class="num">Withheld so far</th><th class="num">Refund / (due)</th>
           </tr></thead>
           <tbody id="birBody"></tbody>
         </table>
@@ -935,9 +942,8 @@
 <div class="modal-backdrop hidden" id="birModal">
   <div class="modal wide">
     <div class="modal-head no-print">
-      <h2>BIR Form 2316</h2>
+      <h2>BIR 2316 details</h2>
       <div>
-        <button class="btn ghost" id="btnPrintBir" type="button">Print</button>
         <button class="btn ghost" id="btnCloseBir" type="button">Close</button>
       </div>
     </div>

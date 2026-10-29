@@ -1764,128 +1764,85 @@
     }).filter(function (x) { return x.f.cutoffs > 0; })
       .sort(function (a, b) { return (a.emp.lastName + a.emp.firstName).localeCompare(b.emp.lastName + b.emp.firstName); });
   }
+  /* Employee details the form asks for that payroll does not carry,
+     kept on the employee (emp.bir) and entered on this tab. */
+  var BIR_FIELDS = [
+    ['rdo', '5 RDO code'], ['address', '6 Registered address'], ['zip', '6A ZIP code'],
+    ['localAddress', '6B Local home address'], ['localZip', '6C ZIP code'], ['foreignAddress', '6D Foreign address'],
+    ['birthDate', '7 Date of birth (YYYY-MM-DD)'], ['contact', '8 Contact number']
+  ];
+  function birInfo(emp) { return emp.bir || {}; }
+  /** What still has to be filled in before the form can be: a TIN, and the details above. */
+  function birMissing(emp) {
+    var m = [], b = birInfo(emp);
+    if (birTin(emp.tin).length !== 4) m.push('TIN');
+    if (!b.rdo) m.push('RDO');
+    if (!b.address) m.push('address');
+    if (!b.zip) m.push('ZIP');
+    if (!b.birthDate) m.push('birth date');
+    return m;
+  }
   function renderBir2316() {
     $('#birYear').textContent = '— ' + state.year;
     var people = birPeople();
+    var co = state.settings.company;
+    $('#birEmployer').innerHTML = '<strong>Employer (Part II):</strong> ' + esc(co.name) + ' · TIN ' + esc(birTin(co.tin).join('-') || '—') +
+      ' · ' + esc(co.address || '—') + ' ' + esc(co.zip || '') +
+      ' <span class="muted">(Settings &amp; Rules → Company)</span>';
+    var money = function (v) { return '<td class="num">' + (v ? plain(v) : '<span class="muted">-</span>') + '</td>'; };
     $('#birBody').innerHTML = people.length ? people.map(function (x) {
-      var it = x.f.items, adj = x.f.adjustment;
+      var it = x.f.items, adj = x.f.adjustment, b = birInfo(x.emp), miss = birMissing(x.emp);
+      var tin = birTin(x.emp.tin);
       return '<tr class="clickable" data-bir-emp="' + esc(x.emp.id) + '"><td class="sticky-col"><button class="link-btn" type="button">' +
-        esc(x.emp.lastName + ', ' + x.emp.firstName) + '</button></td>' +
-        '<td>' + esc(birTin(x.emp.tin).join('-') || '—') + '</td>' +
-        '<td>' + esc(x.f.periodFrom.slice(5)) + ' – ' + esc(x.f.periodTo.slice(5)) + '</td>' +
-        '<td class="num">' + plain(it.i19) + '</td><td class="num">' + plain(it.i38) + '</td><td class="num">' + plain(it.i52) + '</td>' +
-        '<td class="num">' + plain(it.i24) + '</td><td class="num">' + plain(x.f.withheld) + '</td>' +
+        esc([x.emp.lastName, [x.emp.firstName, x.emp.middleName].filter(Boolean).join(' ')].join(', ')) + '</button>' +
+        (miss.length ? '<div class="auto-note" style="color:#b45309">missing: ' + esc(miss.join(', ')) + '</div>' : '') + '</td>' +
+        '<td' + (tin.length === 4 ? '' : ' class="warn"') + '>' + esc(tin.length === 4 ? tin.join('-') : (x.emp.tin || 'none') + ' — check') + '</td>' +
+        '<td>' + esc(b.rdo || '') + '</td><td>' + esc(b.birthDate || '') + '</td>' +
+        '<td>' + esc(b.address || '') + '</td><td>' + esc(b.zip || '') + '</td>' +
+        '<td>' + esc(x.f.periodFrom.slice(5).replace('-', '/')) + ' – ' + esc(x.f.periodTo.slice(5).replace('-', '/')) + '</td>' +
+        ['i34', 'i35', 'i36', 'i37', 'i38', 'i39', 'i48', 'i50', 'i51a', 'i52', 'i19', 'i24', 'i25a'].map(function (k) { return money(it[k]); }).join('') +
+        money(x.f.withheld) +
         '<td class="num' + (adj < 0 ? ' warn' : '') + '">' + (adj < 0 ? '(' + plain(-adj) + ')' : plain(adj)) + '</td></tr>';
-    }).join('') : '<tr><td colspan="9" class="muted" style="padding:18px">Nobody was paid in ' + state.year + '.</td></tr>';
+    }).join('') : '<tr><td colspan="23" class="muted" style="padding:18px">Nobody was paid in ' + state.year + '.</td></tr>';
   }
   /** "758467364" or "345-412-260-0000" → ['758','467','364','0000']. */
   function birTin(v) {
     var d = String(v || '').replace(/\D/g, '');
-    if (d.length < 9) return d ? [d] : [];
+    if (d.length < 9 || /^0+$/.test(d.slice(0, 9)) || /^0{6}/.test(d)) return d ? [d] : [];
     return [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9), (d.slice(9) || '0000')];
   }
+  /* A person's 2316 details: what to enter (kept on the site), then every
+     item of the form with its amount — no form is filled in. */
   function openBir2316(empId) {
     var emp = state.employees.filter(function (e) { return e.id === empId; })[0];
     if (!emp) return;
-    var f = E.bir2316For(emp, state.year, state.dtr, state.settings), it = f.items, co = state.settings.company;
-    var amt = function (k) { return k === null ? '' : (it[k] ? plain(it[k]) : '-'); };
-    var box = function (v, cls) { return '<span class="b ' + (cls || '') + '">' + esc(v || '') + '</span>'; };
-    var tin = function (v) {
-      var t = birTin(v);
-      return '<span class="tin">' + (t.length === 4 ? t : ['', '', '', '']).map(function (x) { return box(x); }).join('<i>-</i>') + '</span>';
-    };
-    var md = function (ymdStr) { return ymdStr ? ymdStr.slice(5, 7) + '/' + ymdStr.slice(8, 10) : ''; };
-    var row = function (no, label, value, note) {
-      return '<div class="r"><span class="n">' + no + '</span><span class="l">' + label + (note ? '<em>' + note + '</em>' : '') +
-        '</span>' + box(value, 'amt') + '</div>';
-    };
-    var head = function (t) { return '<div class="h">' + t + '</div>'; };
-    var name = [emp.lastName, [emp.firstName, emp.middleName].filter(Boolean).join(' ')].filter(Boolean).join(', ');
-    var left =
-      '<div class="r2"><span class="n">1</span><span class="l">For the Year<em>(YYYY)</em></span>' + box(String(f.year), 'w4') + '</div>' +
-      head('Part I - Employee Information') +
-      '<div class="r2"><span class="n">3</span><span class="l">TIN</span>' + tin(emp.tin) + '</div>' +
-      '<div class="r2 col"><span class="l"><b>4</b> Employee’s Name <em>(Last Name, First Name, Middle Name)</em></span>' + box(name, 'wide') +
-        '<span class="l"><b>5</b> RDO Code</span>' + box('', 'w3') + '</div>' +
-      '<div class="r2 col"><span class="l"><b>6</b> Registered Address</span>' + box('', 'wide') + '<span class="l"><b>6A</b> ZIP Code</span>' + box('', 'w3') + '</div>' +
-      '<div class="r2 col"><span class="l"><b>6B</b> Local Home Address</span>' + box('', 'wide') + '<span class="l"><b>6C</b> ZIP Code</span>' + box('', 'w3') + '</div>' +
-      '<div class="r2 col"><span class="l"><b>6D</b> Foreign Address</span>' + box('', 'wide') + '</div>' +
-      '<div class="r2 col"><span class="l"><b>7</b> Date of Birth <em>(MM/DD/YYYY)</em></span>' + box('', 'w4') +
-        '<span class="l"><b>8</b> Contact Number</span>' + box(emp.phone || '', 'w4') + '</div>' +
-      row('9', 'Statutory Minimum Wage rate per day', '') + row('10', 'Statutory Minimum Wage rate per month', '') +
-      '<div class="r2"><span class="n">11</span>' + box('', 'chk') + '<span class="l small">Minimum Wage Earner (MWE) whose compensation is exempt from withholding tax and not subject to income tax</span></div>' +
-      head('Part II - Employer Information (Present)') +
-      '<div class="r2"><span class="n">12</span><span class="l">TIN</span>' + tin(co.tin) + '</div>' +
-      '<div class="r2 col"><span class="l"><b>13</b> Employer’s Name</span>' + box(String(co.name || '').toUpperCase(), 'wide') + '</div>' +
-      '<div class="r2 col"><span class="l"><b>14</b> Registered Address</span>' + box(String(co.address || '').toUpperCase(), 'wide') +
-        '<span class="l"><b>14A</b> ZIP Code</span>' + box(co.zip || '', 'w3') + '</div>' +
-      '<div class="r2"><span class="n">15</span><span class="l">Type of Employer</span>' + box('X', 'chk') + '<span class="l">Main Employer</span>' +
-        box('', 'chk') + '<span class="l">Secondary Employer</span></div>' +
-      head('Part III - Employer Information (Previous)') +
-      '<div class="r2"><span class="n">16</span><span class="l">TIN</span>' + tin('') + '</div>' +
-      '<div class="r2 col"><span class="l"><b>17</b> Employer’s Name</span>' + box('', 'wide') + '</div>' +
-      '<div class="r2 col"><span class="l"><b>18</b> Registered Address</span>' + box('', 'wide') + '<span class="l"><b>18A</b> ZIP Code</span>' + box('', 'w3') + '</div>' +
-      head('Part IVA - Summary') +
-      row('19', 'Gross Compensation Income from Present Employer', amt('i19'), '(Sum of Items 38 and 52)') +
-      row('20', 'Less: Total Non-Taxable/Exempt Compensation Income from Present Employer', amt('i20'), '(From Item 38)') +
-      row('21', 'Taxable Compensation Income from Present Employer', amt('i21'), '(Item 19 Less Item 20) (From Item 52)') +
-      row('22', 'Add: Taxable Compensation Income from Previous Employer, if applicable', amt('i22')) +
-      row('23', 'Gross Taxable Compensation Income', amt('i23'), '(Sum of Items 21 and 22)') +
-      row('24', 'Tax Due', amt('i24')) +
-      row('25', 'Amount of Taxes Withheld<br>25A Present Employer', amt('i25a')) +
-      row('', '25B Previous Employer, if applicable', '') +
-      row('26', 'Total Amount of Taxes Withheld as adjusted', amt('i26'), '(Sum of Items 25A and 25B)') +
-      row('27', '5% Tax Credit (PERA Act of 2008)', '') +
-      row('28', 'Total Taxes Withheld', amt('i28'), '(Sum of Items 26 and 27)');
-    var right =
-      '<div class="r2"><span class="n">2</span><span class="l">For the Period From <em>(MM/DD)</em></span>' + box(md(f.periodFrom), 'w3') +
-        '<span class="l">To <em>(MM/DD)</em></span>' + box(md(f.periodTo), 'w3') + '</div>' +
-      head('Part IV-B Details of Compensation Income &amp; Tax Withheld from Present Employer') +
-      '<div class="sub">A. NON-TAXABLE/EXEMPT COMPENSATION INCOME <span>Amount</span></div>' +
-      row('29', 'Basic Salary (including the exempt P250,000 &amp; below) or the Statutory Minimum Wage of the MWE', '') +
-      row('30', 'Holiday Pay (MWE)', '') + row('31', 'Overtime Pay (MWE)', '') + row('32', 'Night Shift Differential (MWE)', '') +
-      row('33', 'Hazard Pay (MWE)', '') +
-      row('34', '13th Month Pay and Other Benefits', amt('i34'), '(maximum of P90,000)') +
-      row('35', 'De Minimis Benefits', amt('i35')) +
-      row('36', 'SSS, GSIS, PHIC &amp; PAG-IBIG Contributions and Union Dues', amt('i36'), '(Employee share only)') +
-      row('37', 'Salaries and Other Forms of Compensation', amt('i37')) +
-      row('38', 'Total Non-Taxable/Exempt Compensation Income', amt('i38'), '(Sum of Items 29 to 37)') +
-      '<div class="sub">B. TAXABLE COMPENSATION INCOME REGULAR</div>' +
-      row('39', 'Basic Salary', amt('i39')) + row('40', 'Representation', '') + row('41', 'Transportation', '') +
-      row('42', 'Cost of Living Allowance (COLA)', '') + row('43', 'Fixed Housing Allowance', '') +
-      row('44', 'Others <em>(specify)</em>', '') + row('', '44A', '') + row('', '44B', '') +
-      '<div class="sub">SUPPLEMENTARY</div>' +
-      row('45', 'Commission', '') + row('46', 'Profit Sharing', '') + row('47', 'Fees Including Director’s Fees', '') +
-      row('48', 'Taxable 13th Month Benefits', amt('i48')) + row('49', 'Hazard Pay', '') + row('50', 'Overtime Pay', amt('i50')) +
-      row('51', 'Others <em>(specify)</em>', '') + row('', '51A Other Taxable Income', amt('i51a')) + row('', '51B', '') +
-      row('52', 'Total Taxable Compensation Income', amt('i52'), '(Sum of Items 39 to 51B)');
-    $('#birCert').innerHTML = '<div class="f2316">' +
-      '<div class="top"><div class="formno"><small>BIR Form No.</small><strong>2316</strong><small>September 2021(ENCS)</small></div>' +
-      '<div class="title"><small>Republic of the Philippines<br>Department of Finance<br>Bureau of Internal Revenue</small>' +
-      '<strong>Certificate of Compensation<br>Payment/Tax Withheld</strong><small>For Compensation Payment With or Without Tax Withheld</small></div>' +
-      '<div class="formno"><small>2316 9/21ENCSc</small></div></div>' +
-      '<div class="fill">Fill in all applicable spaces. Mark all appropriate boxes with an “X”.</div>' +
-      '<div class="cols"><div>' + left + '</div><div>' + right + '</div></div>' +
-      '<div class="decl">I/We declare, under the penalties of perjury that this certificate has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof. Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes.</div>' +
-      '<div class="sig"><span><b>53</b> Present Employer/Authorized Agent Signature over Printed Name</span><span>Date Signed</span></div>' +
-      '<div class="sig"><span><b>CONFORME: 54</b> ' + esc([emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ')) +
-        '<br>Employee Signature over Printed Name</span><span>Date Signed</span></div>' +
-      '<div class="sig"><span>CTC/Valid ID No. of Employee</span><span>Place of Issue</span><span>Date Issued</span><span>Amount paid, if CTC</span></div>' +
-      '<div class="h">To be accomplished under substituted filing</div>' +
-      '<div class="cols small"><div>I declare, under the penalties of perjury that the information herein stated are reported under BIR Form No. 1604-C which has been filed with the Bureau of Internal Revenue.<div class="sig"><span><b>55</b> Present Employer/Authorized Agent Signature over Printed Name<br>(Head of Accounting/Human Resource or Authorized Representative)</span></div></div>' +
-      '<div>I declare, under the penalties of perjury that I am qualified under substituted filing of Income Tax Return (BIR Form No. 1700), since I received purely compensation income from only one employer in the Philippines for the calendar year; that taxes have been correctly withheld by my employer (tax due equals tax withheld); that the BIR Form No. 1604-C filed by my employer to the BIR shall constitute as my income tax return; and that BIR Form No. 2316 shall serve the same purpose as if BIR Form No. 1700 has been filed pursuant to the provisions of Revenue Regulations (RR) No. 3-2002, as amended.' +
-        '<div class="sig"><span><b>56</b> ' + esc([emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ')) + '<br>Employee Signature over Printed Name</span></div></div></div>' +
-      '<div class="small" style="margin-top:4px">*NOTE: The BIR Data Privacy is in the BIR website (www.bir.gov.ph)</div>' +
-      '</div>' +
-      '<p class="muted no-print" style="font-size:11.5px;margin-top:10px">Worked out from ' + f.cutoffs + ' cutoff(s) paid in ' + f.year +
-      ' and the year’s 13th month. Tax withheld through the cutoffs: ' + plain(f.withheld) + '; year-end adjustment: ' +
-      (f.adjustment >= 0 ? 'refund of ' + plain(f.adjustment) : 'tax still due of ' + plain(-f.adjustment)) +
-      ' (25A shows the tax withheld as adjusted). Fill RDO code, address, ZIP and date of birth on the form.</p>';
+    var f = E.bir2316For(emp, state.year, state.dtr, state.settings), it = f.items, b = birInfo(emp), co = state.settings.company;
+    var kv = function (k, v) { return '<tr><td style="width:46%">' + k + '</td><td><strong>' + esc(v) + '</strong></td></tr>'; };
+    $('#birCert').innerHTML =
+      '<h3 style="margin:0 0 6px">' + esc([emp.lastName, [emp.firstName, emp.middleName].filter(Boolean).join(' ')].join(', ')) +
+        ' — ' + f.year + '</h3>' +
+      '<table class="grid compact" style="width:100%;margin-bottom:12px"><tbody>' +
+        kv('1 For the year', String(f.year)) +
+        kv('2 For the period (MM/DD)', f.periodFrom.slice(5).replace('-', '/') + ' to ' + f.periodTo.slice(5).replace('-', '/')) +
+        kv('3 TIN', birTin(emp.tin).length === 4 ? birTin(emp.tin).join('-') : (emp.tin || 'none') + ' — fix on the Employees tab (201 File)') +
+        kv('4 Employee’s name (Last, First, Middle)', [emp.lastName, [emp.firstName, emp.middleName].filter(Boolean).join(' ')].join(', ')) +
+        kv('12–15 Employer', co.name + ' · TIN ' + (birTin(co.tin).join('-') || '—') + ' · ' + (co.address || '') + ' ' + (co.zip || '') + ' · Main employer') +
+      '</tbody></table>' +
+      '<div class="form-grid" style="padding:0;margin-bottom:12px">' + BIR_FIELDS.map(function (fd) {
+        var v = b[fd[0]] || (fd[0] === 'contact' ? emp.phone || '' : '');
+        return '<label>' + esc(fd[1]) + ' <input type="text" data-bir-field="' + fd[0] + '" data-bir-emp="' + esc(emp.id) + '" value="' + esc(v) + '"></label>';
+      }).join('') + '</div>' +
+      '<table class="grid compact" style="width:100%"><tbody>' + BIR_ITEMS.map(function (r) {
+        return '<tr><td style="width:46px">' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td class="num">' + (it[r[2]] ? plain(it[r[2]]) : '-') + '</td></tr>';
+      }).join('') + '<tr><td colspan="3" class="muted" style="font-size:11.5px">Items 29–33 (minimum wage earner), 40–47, 49 and 51B do not apply and are blank. ' +
+        'Tax withheld through the cutoffs: ' + plain(f.withheld) + '; year-end ' + (f.adjustment >= 0 ? 'refund ' + plain(f.adjustment) : 'tax still due ' + plain(-f.adjustment)) +
+        '; 25A is the tax withheld as adjusted.</td></tr></tbody></table>';
     $('#birModal').classList.remove('hidden');
   }
   function exportBir2316() {
     var people = birPeople();
-    var heads = ['Employee ID', 'Last name', 'First name', 'TIN', 'Period from', 'Period to'];
+    var heads = ['Employee ID', 'Last name', 'First name', 'Middle name', 'TIN', 'RDO code', 'Registered address', 'ZIP code',
+      'Local home address', 'Local ZIP', 'Foreign address', 'Date of birth', 'Contact number', 'Period from', 'Period to'];
     var keys = [];
     BIR_ITEMS.forEach(function (r) { heads.push(r[0] + ' ' + r[1]); keys.push(r[2]); });
     heads.push('Tax withheld through the cutoffs', 'Year-end refund / (due)');
@@ -1893,12 +1850,14 @@
     var rows = [[{ v: 'BIR 2316 \u2014 ' + state.settings.company.name + ' \u2014 ' + state.year, t: 's', s: S.BOLD }],
       heads.map(function (h) { return { v: h, t: 's', s: S.HEAD }; })];
     people.forEach(function (x) {
-      rows.push([x.emp.id, x.emp.lastName, x.emp.firstName, x.emp.tin || '', x.f.periodFrom, x.f.periodTo]
+      var b = birInfo(x.emp);
+      rows.push([x.emp.id, x.emp.lastName, x.emp.firstName, x.emp.middleName, birTin(x.emp.tin).join('-') || x.emp.tin, b.rdo, b.address, b.zip,
+        b.localAddress, b.localZip, b.foreignAddress, b.birthDate, b.contact || x.emp.phone, x.f.periodFrom, x.f.periodTo]
         .map(function (v) { return { v: String(v || ''), t: 's' }; })
         .concat(keys.map(function (k) { return { v: x.f.items[k], t: 'n', s: S.NUM }; }))
         .concat([{ v: x.f.withheld, t: 'n', s: S.NUM }, { v: x.f.adjustment, t: 'n', s: S.NUM }]));
     });
-    var blob = X.build([{ name: 'BIR 2316 ' + state.year, rows: rows, cols: heads.map(function (h, i) { return i < 6 ? 14 : 16; }),
+    var blob = X.build([{ name: 'BIR 2316 ' + state.year, rows: rows, cols: heads.map(function (h, i) { return i < 15 ? 16 : 14; }),
       freeze: { x: 3, y: 2 } }]);
     X.download(blob, 'BIR 2316 \u2014 ' + state.settings.company.name.replace(/[\\/:*?"<>|]/g, '-') + ' \u2014 ' + state.year + '.xlsx');
   }
@@ -3604,7 +3563,17 @@
       if (tr) openBir2316(tr.dataset.birEmp);
     });
     $('#btnBirExport').addEventListener('click', exportBir2316);
-    $('#btnPrintBir').addEventListener('click', function () { window.print(); });
+    $('#birCert').addEventListener('change', function (ev) {
+      var el = ev.target;
+      if (!el.dataset.birField) return;
+      var emp = state.employees.filter(function (e) { return e.id === el.dataset.birEmp; })[0];
+      if (!emp) return;
+      emp.bir = emp.bir || {};
+      var v = String(el.value).trim();
+      if (v) emp.bir[el.dataset.birField] = v; else delete emp.bir[el.dataset.birField];
+      Store.saveEmployees(state.employees);
+      renderBir2316();
+    });
     $('#btnCloseBir').addEventListener('click', function () { $('#birModal').classList.add('hidden'); });
     $('#runBody').addEventListener('click', function (ev) {
       var b = ev.target.closest('[data-backpay-del]');

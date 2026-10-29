@@ -53,7 +53,8 @@ export function PayslipView({
     <div className="rounded-xl border border-gray-200 bg-white p-6 print:border-0 print:p-0">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
         <div>
-          {/trinity/i.test(company.name ?? "") && (
+          {/* The logo of the account the person works on: Trinity for now. */}
+          {/trinity/i.test(details?.account ?? "") && (
             <Image
               src="/trinity-logo-black.png"
               alt="Trinity"

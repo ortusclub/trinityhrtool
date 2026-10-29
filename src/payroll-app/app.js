@@ -152,6 +152,52 @@
     return folded;
   }
 
+  /* OT and ND hours from TrinityHR, straight into the cutoff's timesheet:
+     approved overtime requests on workdays (OT 1.25) and the night part of
+     scheduled shifts worked plus of the overtime (ND HRS). Read once per
+     cutoff a session. Hours they set are marked otNdFrom = 'trinity' and
+     follow TrinityHR on every read (an approval or cancellation since shows
+     next time); hours an imported file set are left alone. Overtime on a
+     rest day or holiday is not at 1.25 — it is kept aside in otNdCheck and
+     shown, to be entered by hand. */
+  var otNd = { done: {} };
+  function syncOtNd(period) {
+    if (otNd.done[period.id] || E.isPostedPeriod(state.dtr, period.id)) return;
+    otNd.done[period.id] = 'loading';
+    psApi('ot-nd?from=' + period.start + '&to=' + period.end).then(function (data) {
+      otNd.done[period.id] = true;
+      var byEmail = {};
+      (data.people || []).forEach(function (p) { byEmail[p.email] = p; });
+      var holiday = {};
+      E.holidaysInPeriod(period, state.holidays, state.settings).forEach(function (h) { holiday[h.date] = h.name; });
+      var wd = state.settings.schedule.workDays, changed = false;
+      (state.period.id === period.id ? state.runEmployees : []).forEach(function (emp) {
+        var key = period.id + '|' + emp.id, d = state.dtr[key] || {};
+        if (d.posted) return;
+        var ours = d.otNdFrom === 'trinity' || (!E.num(d.otHours) && !E.num(d.ndHours));
+        if (!ours) return;
+        var p = byEmail[String(emp.email || '').trim().toLowerCase()];
+        var ot = 0, nd = p ? p.scheduledNd : 0, odd = [];
+        (p ? p.ot : []).forEach(function (o) {
+          nd += o.ndHours;
+          var day = E.parseYmd(o.date), why = holiday[o.date] || (wd.indexOf(day.getDay()) === -1 ? 'rest day' : '');
+          if (why) odd.push(E.fmtShort(day) + ' ' + o.hours + 'h (' + why + ')');
+          else ot += o.hours;
+        });
+        var next = { otHours: ot ? E.r2(ot) : null, ndHours: nd ? E.r2(nd) : null, otNdCheck: odd.length ? odd.join(', ') : null };
+        var has = next.otHours || next.ndHours || next.otNdCheck;
+        if (!has && d.otNdFrom !== 'trinity') return;
+        if (d.otHours === next.otHours && d.ndHours === next.ndHours && d.otNdCheck === next.otNdCheck) return;
+        d.otHours = next.otHours; d.ndHours = next.ndHours; d.otNdCheck = next.otNdCheck;
+        if (has) { d.otNdFrom = 'trinity'; d.ndManual = true; } else { delete d.otNdFrom; delete d.otNdCheck; }
+        state.dtr[key] = d;
+        changed = true;
+      });
+      if (changed) Store.saveDtr(state.dtr);
+      if (state.period.id === period.id) renderRun();
+    }).catch(function () { delete otNd.done[period.id]; });
+  }
+
   function renderRun() {
     var folded = foldMaturedAdjustments();
     if (folded.length) state.foldNotice = folded;
@@ -166,6 +212,7 @@
       var finalHere = e.finalPay && e.finalPay.periodId === state.period.id;
       return !postedHere && (onStaff(e, state.period) || finalHere) && E.num(e.monthlyRate) > 0;
     });
+    syncOtNd(state.period);
     state.run = E.computeRun(state.runEmployees, state.period, state.dtr, state.settings);
     renderPeriodMeta();
     renderRosterNotice();
@@ -363,6 +410,16 @@
       ' style="width:' + (width || 56) + 'px">';
   }
 
+  /** Under OT 1.25 / ND HRS: where the hours came from, and OT to check. */
+  function otNdNote(emp, which) {
+    var d = dtrFor(emp);
+    if (d.posted || d.otNdFrom !== 'trinity') return '';
+    if (which === 'nd') return E.num(d.ndHours) ? '<div class="auto-note">TrinityHR</div>' : '';
+    return (E.num(d.otHours) ? '<div class="auto-note">TrinityHR</div>' : '') +
+      (d.otNdCheck ? '<div class="auto-note warn" title="Overtime on a rest day or holiday — not at 1.25. Enter it in the import file if it is paid.">check: ' +
+        esc(d.otNdCheck) + '</div>' : '');
+  }
+
   function remarksInput(emp) {
     var d = dtrFor(emp);
     var v = d.posted ? d.posted.remarks : d.remarks;
@@ -464,10 +521,10 @@
         cellIn('dtr', dtrInput(emp, 'ptoDays')) +
         cellIn('dtr', dtrInput(emp, 'lateMinutes')) +
         cellIn('dtr', dtrInput(emp, 'undertimeMinutes')) +
-        cellIn('dtr', dtrInput(emp, 'otHours', mgr)) +
+        cellIn('dtr', dtrInput(emp, 'otHours', mgr) + otNdNote(emp, 'ot')) +
         cellIn('dtr', dtrInput(emp, 'otRestSpecialHours', mgr)) +
         cellIn('dtr', dtrInput(emp, 'otRegHolidayHours', mgr)) +
-        cellIn('dtr', dtrInput(emp, 'ndHours', mgr)) +
+        cellIn('dtr', dtrInput(emp, 'ndHours', mgr) + otNdNote(emp, 'nd')) +
         cellIn('dtr', dtrInput(emp, 'restDayHours', mgr)) +
         cellIn('dtr', '<div class="pair">' + dtrInput(emp, 'regHolidayDays', mgr, 42) +
           dtrInput(emp, 'specialHolidayDays', mgr, 42) + '</div>') +
@@ -1089,6 +1146,8 @@
           else d[c.input] = v[c.key];
         });
         delete d.lateHours;   // now counted in minutes
+        delete d.otNdFrom;    // the file's OT / ND hours stand from now on
+        delete d.otNdCheck;
         d.remarks = row.remarks || null;
         d.bonusDetails = row.bonusDetails || null;
         // SSS LOAN and OTHER DEDUCTION were written out with the loan ledger

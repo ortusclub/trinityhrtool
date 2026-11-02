@@ -333,14 +333,9 @@
       <div class="card-head row">
         <div>
           <h2>Holiday calendar <span id="holidayYearLabel" class="muted"></span></h2>
-          <p class="hint">
-            Only holidays fixed by law are pre-loaded. Movable holidays — Holy Week,
-            Eid'l Fitr, Eid'l Adha, National Heroes Day and any special days added by
-            proclamation — need to be entered here once Malacañang releases the proclamation
-            for the year.
-          </p>
+          <p class="muted" id="holidaySource" style="margin:4px 0 0">From Manage Holidays (Philippines).</p>
         </div>
-        <button class="btn" id="btnAddHoliday" type="button">+ Add holiday</button>
+        <button class="btn" id="btnAddHoliday" type="button">Manage Holidays →</button>
       </div>
       <div class="table-scroll">
         <table class="grid" id="holTable">
@@ -351,7 +346,6 @@
               <th>Holiday</th>
               <th>Type</th>
               <th>Falls on a workday?</th>
-              <th></th>
             </tr>
           </thead>
           <tbody id="holBody"></tbody>

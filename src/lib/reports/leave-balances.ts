@@ -29,7 +29,9 @@ export type LeaveBalanceRow = {
  * Mirrors the dashboard's per-user logic but at the company level.
  */
 export async function computeLeaveBalances(
-  admin: SupabaseClient
+  admin: SupabaseClient,
+  // Payroll's final pay needs people who have already left, too.
+  { includeInactive = false }: { includeInactive?: boolean } = {}
 ): Promise<LeaveBalanceRow[]> {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -45,14 +47,14 @@ export async function computeLeaveBalances(
     // (fetchAllRows) or the report silently undercounts. leave_requests is
     // already over 1000 total. Reference tables (plans/allocations) are small
     // and admin-bounded, so a single read is fine.
-    fetchAllRows((from, to) =>
-      admin
+    fetchAllRows((from, to) => {
+      const q = admin
         .from("users")
-        .select("id, full_name, email, department, hire_date, holiday_country")
-        .eq("is_active", true)
+        .select("id, full_name, email, department, hire_date, holiday_country");
+      return (includeInactive ? q : q.eq("is_active", true))
         .order("id")
-        .range(from, to)
-    ),
+        .range(from, to);
+    }),
     fetchAllRows((from, to) =>
       admin
         .from("employee_leave_plans")

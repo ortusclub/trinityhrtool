@@ -4,13 +4,13 @@ import { computeLeaveBalances } from "@/lib/reports/leave-balances";
 import { failed, payrollAdmin } from "../auth";
 
 // GET → { balances: [{ email, allocated, used, remaining, cycleStart }] }
-// Each active employee's Annual Leave for the current cycle, from the same
+// Each employee's Annual Leave (leavers included, for final pay) for the current cycle, from the same
 // ledger as their dashboard (approved leave only; pending is not counted).
 export async function GET() {
   const admin = await payrollAdmin();
   if (admin instanceof NextResponse) return admin;
   try {
-    const rows = await computeLeaveBalances(createAdminClient());
+    const rows = await computeLeaveBalances(createAdminClient(), { includeInactive: true });
     const balances = rows
       .filter((r) => r.leave_type === "annual" && r.employee_email)
       .map((r) => ({

@@ -1903,6 +1903,8 @@
     return E.buildPeriods(y).concat(E.buildPeriods(y + 1)).filter(function (p) { return p.end >= end; }).slice(0, 4);
   }
   function renderFinalPay() {
+    loadLiveLeave();
+    attachLiveLeave();
     var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };
     var from = (state.year - 1) + '-12-01';
     var people = state.employees.filter(function (e) {
@@ -1953,8 +1955,10 @@
           '<input type="text" inputmode="decimal" data-fp-leave="' + id + '" value="' +
           esc(cfg.leaveDays === undefined || cfg.leaveDays === null ? '' : cfg.leaveDays) + '" placeholder="' +
           esc(plain(fp.leaveSuggested)) + '" style="width:56px" title="Days to convert; blank = the prorated unused days"> days' +
-          '<div class="auto-note">' + plain(fp.leaveCredits) + ' \u00d7 ' + plain(fp.monthsWorked) + '/12 months = ' +
-          plain(fp.leaveEarned) + ' earned, ' + plain(fp.leaveUsed) + ' taken</div>' +
+          '<div class="auto-note">' + (fp.leaveHiredInCycle
+            ? plain(fp.leaveEarned) + ' given (TrinityHR, prorated from hire), '
+            : plain(fp.leaveCredits) + ' \u00d7 ' + plain(fp.monthsWorked) + '/12 months = ' + plain(fp.leaveEarned) + ' earned, ') +
+          plain(fp.leaveUsed) + ' taken' + (fp.leaveFromTrinity ? '' : ' \u2014 payroll files, no TrinityHR leave') + '</div>' +
           '<div class="auto-note">' + plain(fp.leaveAmount) + ' at ' + plain(fp.dailyRate) + '/day' +
           (fp.leaveTaxable ? ', ' + plain(fp.leaveTaxable) + ' taxable' : '') + '</div></td>' +
         '<td class="num">' + box(emp, 'tax') + plain(fp.taxAdjustment) +
@@ -3045,10 +3049,10 @@
       liveLeave.byEmail = {};
       (data.balances || []).forEach(function (b) { liveLeave.byEmail[b.email] = b; });
       liveLeave.loading = false;
-      renderYearEnd();
+      renderYearEnd(); renderFinalPay();
     }).catch(function (e) {
       liveLeave.loading = false; liveLeave.error = e.message; liveLeave.byEmail = {};
-      renderYearEnd();
+      renderYearEnd(); renderFinalPay();
     });
   }
 

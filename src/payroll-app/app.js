@@ -1847,6 +1847,13 @@
     var heads = tableEl.querySelectorAll('thead tr:last-child th');
     Array.prototype.forEach.call(heads, function (th, i) {
       if (!th.textContent.trim()) return;   // the Remove column
+      if (!th.querySelector('.th-label')) {
+        // The label and its sort button sit together, above the filter.
+        var label = document.createElement('span');
+        label.className = 'th-label';
+        while (th.firstChild) label.appendChild(th.firstChild);
+        th.appendChild(label);
+      }
       th.classList.add('sortable');
       th.title = th.title || 'Sort by this column (click again to reverse)';
       th.dataset.sortCol = i;

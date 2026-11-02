@@ -514,14 +514,14 @@ th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--accent, #12557a); }
 /* A small sort button on every sortable header: ⇅ until used, then ▲ / ▼. */
 th.sortable { white-space: nowrap; }
-th.sortable::after {
+th.sortable .th-label::after {
   content: "⇅"; display: inline-block; margin-left: 5px; padding: 0 4px;
   border: 1px solid var(--line, #d6dbe1); border-radius: 4px;
   font-size: 10px; line-height: 15px; color: var(--muted, #7a8794); vertical-align: 1px;
 }
-th.sortable:hover::after { border-color: currentColor; color: inherit; }
-th.sortable[data-dir="asc"]::after { content: "▲"; color: #fff; background: var(--accent, #12557a); border-color: var(--accent, #12557a); }
-th.sortable[data-dir="desc"]::after { content: "▼"; color: #fff; background: var(--accent, #12557a); border-color: var(--accent, #12557a); }
+th.sortable:hover .th-label::after { border-color: currentColor; color: inherit; }
+th.sortable[data-dir="asc"] .th-label::after { content: "▲"; color: #fff; background: var(--accent, #12557a); border-color: var(--accent, #12557a); }
+th.sortable[data-dir="desc"] .th-label::after { content: "▼"; color: #fff; background: var(--accent, #12557a); border-color: var(--accent, #12557a); }
 .sort-select { font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px;
   border: 1px solid #d1d5db; background: #fff; }
 

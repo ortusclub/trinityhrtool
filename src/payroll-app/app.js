@@ -1838,7 +1838,9 @@
     var tableEl = body.closest('table');
     var heads = tableEl.querySelectorAll('thead tr:last-child th');
     Array.prototype.forEach.call(heads, function (th, i) {
+      if (!th.textContent.trim()) return;   // the Remove column
       th.classList.add('sortable');
+      th.title = th.title || 'Sort by this column (click again to reverse)';
       th.dataset.sortCol = i;
       th.removeAttribute('data-dir');
       if (st && st.col === i) th.setAttribute('data-dir', st.dir);

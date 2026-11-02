@@ -81,6 +81,7 @@
   function refreshPeriods(keepId) {
     state.periods = E.buildPeriods(state.year);
     state.holidays = Store.loadHolidays(state.year);
+    syncHolidays(state.year);
 
     var sel = $('#periodSelect');
     sel.innerHTML = state.periods.map(function (p) {
@@ -3122,8 +3123,40 @@
      ===================================================================== */
   var DAYNAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+  /* The holidays come from TrinityHR's Manage Holidays (Philippines), read
+     once a session per year. Manage Holidays does not say regular or
+     special, so that is kept here per date: guessed from the name the first
+     time (the regular holidays of RA 9492 and the two Eids), then whatever
+     is chosen in the Type column. The list is saved, so it still works
+     if TrinityHR cannot be reached. */
+  var REGULAR_NAMES = /new year'?s day|maundy|good friday|kagitingan|labou?r day|independence|heroes|bonifacio|christmas day|rizal|eid/i;
+  var holidaySync = { done: {}, error: '' };
+  function syncHolidays(year) {
+    if (holidaySync.done[year]) return;
+    holidaySync.done[year] = 'loading';
+    psApi('holidays?year=' + year).then(function (data) {
+      holidaySync.done[year] = true;
+      holidaySync.error = '';
+      var typeOf = {};
+      Store.loadHolidays(year).forEach(function (h) { typeOf[h.date] = h.type; });
+      var list = (data.holidays || []).map(function (h) {
+        return { date: h.date, name: h.name, type: typeOf[h.date] || (REGULAR_NAMES.test(h.name) ? 'regular' : 'special') };
+      });
+      Store.saveHolidays(year, list);
+      if (state.year === year) { state.holidays = list; renderHolidays(); renderRun(); }
+    }).catch(function (e) {
+      holidaySync.done[year] = false;
+      holidaySync.error = e.message;
+      if (state.year === year) renderHolidays();
+    });
+  }
+
   function renderHolidays() {
     $('#holidayYearLabel').textContent = '— ' + state.year;
+    var src = $('#holidaySource');
+    if (src) src.textContent = holidaySync.done[state.year] === 'loading' ? 'Loading from Manage Holidays\u2026'
+      : holidaySync.error ? 'Could not load Manage Holidays (' + holidaySync.error + ') \u2014 showing the last copy.'
+      : 'From Manage Holidays (Philippines). Add, change or remove holidays there; set regular or special here.';
     var wd = state.settings.schedule.workDays;
     var sorted = state.holidays.slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; });
     state.holidays = sorted;
@@ -3132,15 +3165,14 @@
       var d = E.parseYmd(h.date);
       var isWork = wd.indexOf(d.getDay()) !== -1;
       return '<tr>' +
-        '<td><input type="date" data-hol="' + i + '" data-key="date" value="' + esc(h.date) + '"></td>' +
+        '<td>' + esc(E.fmtLong ? E.fmtLong(d) : h.date) + '</td>' +
         '<td>' + DAYNAMES[d.getDay()] + '</td>' +
-        '<td><input type="text" data-hol="' + i + '" data-key="name" value="' + esc(h.name) + '" style="width:260px"></td>' +
+        '<td>' + esc(h.name) + '</td>' +
         '<td><select data-hol="' + i + '" data-key="type">' +
           '<option value="regular"' + (h.type === 'regular' ? ' selected' : '') + '>Regular holiday</option>' +
           '<option value="special"' + (h.type === 'special' ? ' selected' : '') + '>Special non-working</option>' +
         '</select></td>' +
         '<td>' + (isWork ? 'Yes' : '<span class="muted">No — rest day</span>') + '</td>' +
-        '<td><button class="btn ghost tiny danger" data-del-hol="' + i + '" type="button">Remove</button></td>' +
         '</tr>';
     }).join('');
   }
@@ -4329,17 +4361,8 @@
       Store.saveHolidays(state.year, state.holidays);
       renderHolidays(); renderRun();
     });
-    $('#holBody').addEventListener('click', function (ev) {
-      var b = ev.target.closest('[data-del-hol]');
-      if (!b) return;
-      state.holidays.splice(+b.dataset.delHol, 1);
-      Store.saveHolidays(state.year, state.holidays);
-      renderHolidays(); renderRun();
-    });
     $('#btnAddHoliday').addEventListener('click', function () {
-      state.holidays.push({ date: state.year + '-01-01', name: 'New holiday', type: 'regular' });
-      Store.saveHolidays(state.year, state.holidays);
-      renderHolidays(); renderRun();
+      window.top.location.href = '/admin/holidays';
     });
 
     /* ---- settings ---- */

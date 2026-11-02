@@ -901,7 +901,8 @@
       monetizableDays: r2(monetizableDays),
       monetizableAmount: r2(monetizableDays * dailyRate),
       monetizeCappedByRule: remaining > cap.maxDays,
-      fromTrinity: !!live
+      fromTrinity: !!live,
+      cycleStart: live ? String(live.cycleStart).slice(0, 10) : ''
     };
   }
 
@@ -1334,7 +1335,11 @@
     var thirteenthTaxable = on('thirteenth') ? ye.thirteenthBalanceTaxable : 0;
 
     var leave = ye.leave, daily = rateSet(emp, settings).daily;
-    var leaveEarned = r2(leave.credits * ye.monthsWorked / 12);
+    // TrinityHR already prorates a first-year allocation from the hire date,
+    // so someone hired this cycle gets their TrinityHR balance as it is;
+    // a full year's credits are prorated to the months worked.
+    var hiredInCycle = leave.fromTrinity && emp.dateHired && emp.dateHired > leave.cycleStart;
+    var leaveEarned = hiredInCycle ? leave.credits : r2(leave.credits * ye.monthsWorked / 12);
     var leaveUnused = r2(Math.max(0, leaveEarned - leave.usedThisYear));
     var typed = cfg.leaveDays !== undefined && cfg.leaveDays !== null && cfg.leaveDays !== '';
     var leaveDays = on('leave') ? r2(Math.max(0, typed ? num(cfg.leaveDays) : leaveUnused)) : 0;
@@ -1370,6 +1375,7 @@
       thirteenth: thirteenth, thirteenthTaxable: thirteenthTaxable, thirteenthPaid: ye.thirteenthPaid,
       leaveDays: leaveDays, leaveSuggested: leaveUnused, leaveEarned: leaveEarned, leaveCredits: leave.credits,
       leaveUsed: leave.usedThisYear, monthsWorked: ye.monthsWorked,
+      leaveFromTrinity: leave.fromTrinity, leaveHiredInCycle: !!hiredInCycle,
       leaveAmount: leaveAmount, leaveTaxable: leaveTaxable, dailyRate: r2(daily),
       loanRows: loanRows, loanBalance: r2(loanRows.reduce(function (t, l) { return t + l.amount; }, 0)),
       clearance: clearance, clearanceTotal: r2(clearance.reduce(function (t, c) { return t + c.amount; }, 0)),

@@ -2308,9 +2308,24 @@
     return '<span class="pill rf">Active</span>';
   }
 
+  /* Annual Leave left in TrinityHR (pending not counted), from the same
+     balances as the leave ledger and final pay. */
+  function leaveCell(emp) {
+    var b = liveLeave.byEmail ? liveLeave.byEmail[String(emp.email || '').trim().toLowerCase()] : null;
+    if (!b) {
+      return '<td class="num muted" title="' + (liveLeave.loading ? 'Loading from TrinityHR\u2026'
+        : emp.email ? 'No Annual Leave in TrinityHR for this email' : 'No email \u2014 cannot match TrinityHR') + '">' +
+        (liveLeave.loading ? '\u2026' : '\u2014') + '</td>';
+    }
+    return '<td class="num" title="Annual Leave this cycle: ' + plain(b.allocated) + ' given, ' + plain(b.used) +
+      ' used (TrinityHR, pending not counted)">' + plain(b.remaining) +
+      '<div class="auto-note">of ' + plain(b.allocated) + ', ' + plain(b.used) + ' used</div></td>';
+  }
+
   function renderEmployees() {
+    loadLiveLeave();
     if (!state.employees.length) {
-      $('#empBody').innerHTML = '<tr><td colspan="16" class="muted" style="padding:18px">' +
+      $('#empBody').innerHTML = '<tr><td colspan="17" class="muted" style="padding:18px">' +
         'No employees yet. Import the 201 File to load the roster.</td></tr>';
       return;
     }
@@ -2325,6 +2340,7 @@
         '<td class="muted">' + esc(emp.company || '') + '</td>' +
         '<td><input type="date" data-emp-idx="' + i + '" data-key="dateHired" value="' + esc(emp.dateHired || '') + '"></td>' +
         '<td><input type="date" data-emp-idx="' + i + '" data-key="endDate" value="' + esc(emp.endDate || '') + '"></td>' +
+        leaveCell(emp) +
         '<td><input type="text" data-emp-idx="' + i + '" data-key="email" value="' + esc(emp.email || '') + '" style="width:200px"></td>' +
         '<td><input type="text" data-emp-idx="' + i + '" data-key="position" value="' + esc(emp.position) + '" style="width:200px"></td>' +
         '<td><input type="text" data-emp-idx="' + i + '" data-key="department" value="' + esc(emp.department) + '" style="width:150px"></td>' +
@@ -2362,7 +2378,7 @@
       if (hit) shown++;
     });
     if (rows.length && !shown) {
-      body.insertAdjacentHTML('beforeend', '<tr class="no-match"><td colspan="16" class="muted" style="padding:18px">' +
+      body.insertAdjacentHTML('beforeend', '<tr class="no-match"><td colspan="17" class="muted" style="padding:18px">' +
         'No employees match \u201c' + esc(input.value.trim()) + '\u201d.</td></tr>');
     }
   }
@@ -3049,10 +3065,10 @@
       liveLeave.byEmail = {};
       (data.balances || []).forEach(function (b) { liveLeave.byEmail[b.email] = b; });
       liveLeave.loading = false;
-      renderYearEnd(); renderFinalPay();
+      renderYearEnd(); renderFinalPay(); renderEmployees();
     }).catch(function (e) {
       liveLeave.loading = false; liveLeave.error = e.message; liveLeave.byEmail = {};
-      renderYearEnd(); renderFinalPay();
+      renderYearEnd(); renderFinalPay(); renderEmployees();
     });
   }
 

@@ -1831,7 +1831,15 @@
     return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
   }
 
+  /* After every render: order the rows, then (re)build the column filters
+     and hide what they leave out. */
   function applySort(table) {
+    sortRows(table);
+    filterControls(table);
+    applyFilters(table);
+  }
+
+  function sortRows(table) {
     var st = sortState[table];
     var body = $(SORT_BODY[table]);
     if (!body) return;
@@ -1864,10 +1872,102 @@
       .forEach(function (r) { body.appendChild(r.tr); });
   }
 
+  /* =====================================================================
+     COLUMN FILTERS — a box under each sortable header. Text matches
+     anywhere in what the cell shows; on numbers >, <, >=, <= or = compare
+     (">0", "<=15"); "blank" finds empty cells. A column with only a few
+     different values (company, classification …) gets a list instead.
+     Filters last until the page is reloaded.
+     ===================================================================== */
+  var colFilters = { run: {}, emp: {} };
+  function headCells(table) {
+    var body = $(SORT_BODY[table]);
+    return body ? Array.prototype.slice.call(body.closest('table').querySelectorAll('thead tr:last-child th')) : [];
+  }
+  function dataRows(table) {
+    var body = $(SORT_BODY[table]);
+    return body ? Array.prototype.slice.call(body.querySelectorAll(':scope > tr[data-s-id]')) : [];
+  }
+  function isBlank(v) { return v === '' || v === '\u2014'; }
+
+  function filterControls(table) {
+    var rows = dataRows(table);
+    headCells(table).forEach(function (th, i) {
+      if (!th.classList.contains('sortable')) return;
+      var vals = {}, n = 0, numeric = true;
+      rows.forEach(function (tr) {
+        var v = cellValue(tr.children[i]);
+        if (isBlank(v)) return;
+        if (asNumber(v) === null) numeric = false;
+        if (!vals[v]) { vals[v] = 1; n++; }
+      });
+      var list = !numeric && n > 0 && n <= 12 && rows.length > n;
+      var cur = colFilters[table][i] || { value: '' };
+      var box = th.querySelector('.col-filter');
+      if (!box || (box.tagName === 'SELECT') !== list) {
+        if (box) box.remove();
+        th.insertAdjacentHTML('beforeend', list
+          ? '<select class="col-filter" data-filter-col="' + i + '" aria-label="Filter"></select>'
+          : '<input type="search" class="col-filter" data-filter-col="' + i + '" placeholder="Filter" aria-label="Filter"' +
+            ' title="Type to filter. Numbers: >0, <=15, =0. Empty cells: blank">');
+        box = th.querySelector('.col-filter');
+        if (!list) box.value = cur.exact ? '' : cur.value;
+      }
+      if (list) {
+        box.innerHTML = '<option value="">All</option>' + Object.keys(vals).sort().map(function (v) {
+          return '<option>' + esc(v) + '</option>';
+        }).join('') + '<option value="(blank)">(blank)</option>';
+        box.value = cur.exact ? cur.value : '';
+        if (box.value !== (cur.exact ? cur.value : '')) delete colFilters[table][i];   // value gone
+      }
+      box.classList.toggle('on', !!box.value);
+    });
+  }
+
+  function filterMatch(v, f) {
+    if (/^blank$/i.test(f)) return isBlank(v);
+    var m = /^(>=|<=|>|<|=)\s*(-?[\d,.]+)$/.exec(f);
+    if (m) {
+      var n = asNumber(v), x = asNumber(m[2]);
+      if (n === null || x === null) return false;
+      return m[1] === '>' ? n > x : m[1] === '<' ? n < x : m[1] === '>=' ? n >= x : m[1] === '<=' ? n <= x : n === x;
+    }
+    return v.toLowerCase().indexOf(f.toLowerCase()) !== -1;
+  }
+
+  function applyFilters(table) {
+    var body = $(SORT_BODY[table]);
+    if (!body) return;
+    var none = body.querySelector('tr.no-match');
+    if (none) none.remove();
+    var search = table === 'emp' && $('#empSearch') ? $('#empSearch').value : '';
+    var words = search.toLowerCase().split(/\s+/).filter(Boolean);
+    var f = colFilters[table];
+    var cols = Object.keys(f).filter(function (c) { return f[c] && String(f[c].value).trim(); });
+    var rows = dataRows(table), shown = 0;
+    rows.forEach(function (tr) {
+      var hit = cols.every(function (c) {
+        var v = cellValue(tr.children[c]), want = String(f[c].value).trim();
+        return f[c].exact ? (want === '(blank)' ? isBlank(v) : v === want) : filterMatch(v, want);
+      });
+      if (hit && words.length) {
+        var text = Array.prototype.map.call(tr.children, cellValue).join(' ').toLowerCase();
+        hit = words.every(function (w) { return text.indexOf(w) !== -1; });
+      }
+      tr.style.display = hit ? '' : 'none';
+      if (hit) shown++;
+    });
+    if (rows.length && !shown) {
+      body.insertAdjacentHTML('beforeend', '<tr class="no-match"><td colspan="' + headCells(table).length +
+        '" class="muted" style="padding:18px">No one matches the search and filters.</td></tr>');
+    }
+  }
+
   function wireSort(table) {
     var body = $(SORT_BODY[table]);
     var tableEl = body.closest('table');
     tableEl.querySelector('thead').addEventListener('click', function (ev) {
+      if (ev.target.closest('.col-filter')) return;   // typing in a filter, not sorting
       var th = ev.target.closest('th[data-sort-col]');
       if (!th) return;
       var col = +th.dataset.sortCol, cur = sortState[table];
@@ -1878,6 +1978,15 @@
       saveSort();
       applySort(table);
     });
+    var onFilter = function (ev) {
+      var box = ev.target.closest('.col-filter');
+      if (!box) return;
+      colFilters[table][box.dataset.filterCol] = { value: box.value, exact: box.tagName === 'SELECT' };
+      box.classList.toggle('on', !!box.value);
+      applyFilters(table);
+    };
+    tableEl.querySelector('thead').addEventListener('input', onFilter);
+    tableEl.querySelector('thead').addEventListener('change', onFilter);
     var sel = $('#sort-' + table);
     sel.innerHTML = '<option value="">Sort by…</option>' + SORT_FIELDS[table].map(function (f) {
       return '<option value="' + f[0] + ':asc">' + f[1] + ' ↑</option>' +
@@ -2364,26 +2473,9 @@
   }
 
   /* The search box above the roster: hides rows that don't contain every
-     word typed, looking at what each row shows (ID, names, email, company,
-     position, department), so edits are found without a re-render. */
-  function filterEmployees() {
-    var input = $('#empSearch'), body = $('#empBody');
-    if (!input || !body) return;
-    var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
-    var none = body.querySelector('tr.no-match');
-    if (none) none.remove();
-    var rows = body.querySelectorAll(':scope > tr[data-s-id]'), shown = 0;
-    Array.prototype.forEach.call(rows, function (tr) {
-      var text = Array.prototype.map.call(tr.children, cellValue).join(' ').toLowerCase();
-      var hit = words.every(function (w) { return text.indexOf(w) !== -1; });
-      tr.style.display = hit ? '' : 'none';
-      if (hit) shown++;
-    });
-    if (rows.length && !shown) {
-      body.insertAdjacentHTML('beforeend', '<tr class="no-match"><td colspan="17" class="muted" style="padding:18px">' +
-        'No employees match \u201c' + esc(input.value.trim()) + '\u201d.</td></tr>');
-    }
-  }
+     word typed, looking at what each row shows, together with the column
+     filters (applyFilters). */
+  function filterEmployees() { applyFilters('emp'); }
 
   var ITEM_KINDS = [
     { v: 'deduction', t: 'Deduction (from net pay)' },

@@ -1335,11 +1335,14 @@
     var thirteenthTaxable = on('thirteenth') ? ye.thirteenthBalanceTaxable : 0;
 
     var leave = ye.leave, daily = rateSet(emp, settings).daily;
-    // TrinityHR already prorates a first-year allocation from the hire date,
-    // so someone hired this cycle gets their TrinityHR balance as it is;
-    // a full year's credits are prorated to the months worked.
-    var hiredInCycle = leave.fromTrinity && emp.dateHired && emp.dateHired > leave.cycleStart;
-    var leaveEarned = hiredInCycle ? leave.credits : r2(leave.credits * ye.monthsWorked / 12);
+    // Hired and leaving in the same year: the new-hire credits (10) × the
+    // months stayed ÷ 12. Otherwise the year's credits × months worked ÷ 12.
+    // Less the leave taken; never below 0 — leave is a benefit, so leave
+    // taken beyond what was earned is not deducted from the final pay.
+    var hiredSameYear = !!emp.dateHired && String(emp.dateHired).slice(0, 4) === String(workYear);
+    var credits = hiredSameYear ? num(settings.leave.newHireCredits === undefined ? 10 : settings.leave.newHireCredits)
+      : leave.credits;
+    var leaveEarned = r2(credits * ye.monthsWorked / 12);
     var leaveUnused = r2(Math.max(0, leaveEarned - leave.usedThisYear));
     var typed = cfg.leaveDays !== undefined && cfg.leaveDays !== null && cfg.leaveDays !== '';
     var leaveDays = on('leave') ? r2(Math.max(0, typed ? num(cfg.leaveDays) : leaveUnused)) : 0;
@@ -1373,9 +1376,9 @@
     return {
       period: period,
       thirteenth: thirteenth, thirteenthTaxable: thirteenthTaxable, thirteenthPaid: ye.thirteenthPaid,
-      leaveDays: leaveDays, leaveSuggested: leaveUnused, leaveEarned: leaveEarned, leaveCredits: leave.credits,
+      leaveDays: leaveDays, leaveSuggested: leaveUnused, leaveEarned: leaveEarned, leaveCredits: credits,
       leaveUsed: leave.usedThisYear, monthsWorked: ye.monthsWorked,
-      leaveFromTrinity: leave.fromTrinity, leaveHiredInCycle: !!hiredInCycle,
+      leaveFromTrinity: leave.fromTrinity, leaveHiredSameYear: hiredSameYear,
       leaveAmount: leaveAmount, leaveTaxable: leaveTaxable, dailyRate: r2(daily),
       loanRows: loanRows, loanBalance: r2(loanRows.reduce(function (t, l) { return t + l.amount; }, 0)),
       clearance: clearance, clearanceTotal: r2(clearance.reduce(function (t, c) { return t + c.amount; }, 0)),

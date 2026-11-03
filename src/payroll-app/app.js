@@ -2074,9 +2074,8 @@
           '<input type="text" inputmode="decimal" data-fp-leave="' + id + '" value="' +
           esc(cfg.leaveDays === undefined || cfg.leaveDays === null ? '' : cfg.leaveDays) + '" placeholder="' +
           esc(plain(fp.leaveSuggested)) + '" style="width:56px" title="Days to convert; blank = the prorated unused days"> days' +
-          '<div class="auto-note">' + (fp.leaveHiredInCycle
-            ? plain(fp.leaveEarned) + ' given (TrinityHR, prorated from hire), '
-            : plain(fp.leaveCredits) + ' \u00d7 ' + plain(fp.monthsWorked) + '/12 months = ' + plain(fp.leaveEarned) + ' earned, ') +
+          '<div class="auto-note">' + plain(fp.leaveCredits) + ' \u00d7 ' + plain(fp.monthsWorked) + '/12 months' +
+            (fp.leaveHiredSameYear ? ' (hired this year)' : '') + ' = ' + plain(fp.leaveEarned) + ' earned, ' +
           plain(fp.leaveUsed) + ' taken' + (fp.leaveFromTrinity ? '' : ' \u2014 payroll files, no TrinityHR leave') + '</div>' +
           '<div class="auto-note">' + plain(fp.leaveAmount) + ' at ' + plain(fp.dailyRate) + '/day' +
           (fp.leaveTaxable ? ', ' + plain(fp.leaveTaxable) + ' taxable' : '') + '</div></td>' +

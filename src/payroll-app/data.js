@@ -70,6 +70,7 @@
 
     leave: {
       annualCredits: 15,        // default when an employee has none set
+      newHireCredits: 10,       // final pay of someone hired and leaving the same year
       allowNegative: false,     // warn once credits are exhausted
 
       // Monetization: unused credits an employee may convert to cash at

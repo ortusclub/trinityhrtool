@@ -1322,6 +1322,18 @@
    *                them is counted once, here.
    * Each part can be switched off (thirteenth/leave/tax/loans === false).
    */
+  /** Months from one date to another by the calendar (Jun 29 → Oct 29 is 4;
+   *  leftover days count as a share of a 30-day month), or null without both. */
+  function calendarMonths(from, to) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(from || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(to || ''))) return null;
+    var a = parseYmd(from), b = parseYmd(to);
+    if (b < a) return 0;
+    var m = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
+    var days = b.getDate() - a.getDate();
+    if (days < 0) { m--; days += 30; }
+    return Math.min(12, m + days / 30);
+  }
+
   function finalPayFor(emp, dtrMap, settings) {
     var cfg = emp.finalPay;
     var period = cfg && cfg.periodId ? periodById(cfg.periodId) : null;
@@ -1342,7 +1354,12 @@
     var hiredSameYear = !!emp.dateHired && String(emp.dateHired).slice(0, 4) === String(workYear);
     var credits = hiredSameYear ? num(settings.leave.newHireCredits === undefined ? 10 : settings.leave.newHireCredits)
       : leave.credits;
-    var leaveEarned = r2(credits * ye.monthsWorked / 12);
+    // Months stayed by the calendar, from the hire date (or Jan 1) to the
+    // last day: Jun 29 – Oct 29 is 4. Earned leave rounds UP to the nearest
+    // half day: 10 × 4/12 = 3.33 → 3.5.
+    var months = calendarMonths(hiredSameYear ? emp.dateHired : workYear + '-01-01', emp.endDate);
+    if (months === null) months = ye.monthsWorked;
+    var leaveEarned = Math.ceil(r2(credits * months / 12) * 2) / 2;
     var leaveUnused = r2(Math.max(0, leaveEarned - leave.usedThisYear));
     var typed = cfg.leaveDays !== undefined && cfg.leaveDays !== null && cfg.leaveDays !== '';
     var leaveDays = on('leave') ? r2(Math.max(0, typed ? num(cfg.leaveDays) : leaveUnused)) : 0;
@@ -1377,7 +1394,7 @@
       period: period,
       thirteenth: thirteenth, thirteenthTaxable: thirteenthTaxable, thirteenthPaid: ye.thirteenthPaid,
       leaveDays: leaveDays, leaveSuggested: leaveUnused, leaveEarned: leaveEarned, leaveCredits: credits,
-      leaveUsed: leave.usedThisYear, monthsWorked: ye.monthsWorked,
+      leaveUsed: leave.usedThisYear, monthsWorked: r2(months), leaveEarnedExact: r2(credits * months / 12),
       leaveFromTrinity: leave.fromTrinity, leaveHiredSameYear: hiredSameYear,
       leaveAmount: leaveAmount, leaveTaxable: leaveTaxable, dailyRate: r2(daily),
       loanRows: loanRows, loanBalance: r2(loanRows.reduce(function (t, l) { return t + l.amount; }, 0)),

@@ -5,7 +5,9 @@ import { nightDifferentialHours } from "@/lib/utils";
 import { failed, payrollAdmin } from "../auth";
 
 // GET ?from=YYYY-MM-DD&to=YYYY-MM-DD →
-//   { people: [{ email, ot: [{ date, hours, ndHours }], scheduledNd }] }
+//   { people: [{ email, ot: [{ date, hours, ndHours, restDay }], scheduledNd }] }
+// restDay: the employee's own day off that date per their attendance log
+// (rest day, on leave, or no scheduled shift); null when there is no log.
 // Approved overtime requests in the cutoff (the Overtime Requests report)
 // and night-differential hours of scheduled shifts actually worked (the
 // Night Differential (Payroll) report), per employee by work email.
@@ -33,7 +35,7 @@ export async function GET(request: Request) {
     const [{ data: ot, error }, nd] = await Promise.all([
       admin
         .from("overtime_requests")
-        .select("requested_date, start_time, end_time, employee:users!overtime_requests_employee_id_fkey(email)")
+        .select("employee_id, requested_date, start_time, end_time, employee:users!overtime_requests_employee_id_fkey(email)")
         .eq("status", "approved")
         .gte("requested_date", from)
         .lte("requested_date", to)
@@ -42,7 +44,28 @@ export async function GET(request: Request) {
     ]);
     if (error) throw new Error(error.message);
 
-    type Person = { email: string; ot: { date: string; hours: number; ndHours: number }[]; scheduledNd: number };
+    // Each overtime day's attendance log: was it the employee's day off?
+    const ids = [...new Set((ot ?? []).map((r) => r.employee_id))];
+    const dayOff = new Map<string, boolean>();
+    if (ids.length) {
+      const { data: logs, error: logErr } = await admin
+        .from("attendance_logs")
+        .select("employee_id, date, status, scheduled_start")
+        .in("employee_id", ids)
+        .gte("date", from)
+        .lte("date", to);
+      if (logErr) throw new Error(logErr.message);
+      for (const l of logs ?? []) {
+        dayOff.set(`${l.employee_id}|${l.date}`,
+          l.status === "rest_day" || l.status === "on_leave" || !l.scheduled_start);
+      }
+    }
+
+    type Person = {
+      email: string;
+      ot: { date: string; hours: number; ndHours: number; restDay: boolean | null }[];
+      scheduledNd: number;
+    };
     const people = new Map<string, Person>();
     const get = (email: string) => {
       const k = email.trim().toLowerCase();
@@ -56,6 +79,7 @@ export async function GET(request: Request) {
         date: r.requested_date,
         hours: hoursBetween(r.start_time, r.end_time),
         ndHours: nightDifferentialHours(r.start_time, r.end_time),
+        restDay: dayOff.get(`${r.employee_id}|${r.requested_date}`) ?? null,
       });
     }
     for (const r of nd) {

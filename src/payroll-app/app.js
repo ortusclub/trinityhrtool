@@ -824,7 +824,8 @@
             : '') + '</td>' +
         cellIn('alw', dtrInput(emp, 'quarterlyBonus', false, 92, true) + bonusDetailsInput(emp)) +
         cellIn('alw', dtrInput(emp, 'commission', false, 92, true)) +
-        cellIn('alw', dtrInput(emp, 'nonTaxableIncome', false, 92, true)) +
+        // The cutoff's non-taxable pay in total, as the template's column.
+        '<td class="num' + (e.nonTaxable ? '' : ' zero') + '">' + plain(e.nonTaxable) + '</td>' +
 
         // ---- earnings ----
         '<td class="num' + (e.regularPay ? '' : ' zero') + '">' + plain(e.regularPay) +
@@ -1012,7 +1013,7 @@
       regularPay: s.rates.semiMonthly, otHours: d.otHours, otPay: e.otPay,
       ndHours: d.ndHours, ndPay: e.ndPay,
       deMinimis: E.r2(e.deMinimis + e.deMinimisDeduction), quarterlyBonus: e.quarterlyBonus,
-      bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, nonTaxIncome: e.nonTaxableIncome,
+      bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, nonTaxTotal: e.nonTaxable,
       thirteenth: e.thirteenthMonth, exMilestones: e.companyBonus, ptoPay: e.ptoPay || 0, sssLoan: p.sssLoan, classPass: p.classPass,
       travel: e.transportationGiven, absentDays: d.absentDays + d.unpaidLeaveDays,
       absenceDeduction: e.absenceDeduction, lateMinutes: d.lateMinutes,

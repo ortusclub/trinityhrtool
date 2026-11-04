@@ -47,10 +47,6 @@
     // Not written to the template or the summary (sheet: false), but still
     // read from a file that has the column.
     { head: 'COMMISSION', key: 'commission', input: 'commission', width: 12, alias: ['COMMISSIONS'], sheet: false },
-    // Any other non-taxable pay: in gross, kept out of the taxable base;
-    // BIR 2316 item 37.
-    { head: 'NON-TAXABLE INCOME', key: 'nonTaxIncome', input: 'nonTaxableIncome', width: 12,
-      alias: ['NON TAXABLE INCOME', 'NONTAXABLE INCOME'] },
     // Back pay of a backdated raise (worked out on the site from the new rate
     // and its date); older files' salary adjustment column reads into it.
     { head: 'SALARY ADJ (BACK PAY)', key: 'salaryAdj', width: 13,
@@ -70,6 +66,11 @@
     { head: 'PTO', key: 'ptoPay', input: 'ptoPay', width: 12, alias: ['PTO PAY'] },
     { head: 'TRAVEL ALLOWANCE', key: 'travel', input: 'transportationAllowance', width: 12,
       alias: ['TRANSPORTATION ALLOWANCE'] },
+    // The total of the non-taxable pay before it: 13th month (its tax-free
+    // part), anniversary bonus, de minimis, PTO and travel allowance, net of
+    // their deductions, plus non-taxable items with no column. NET TAXABLE
+    // AMOUNT takes it off. A formula, never read back as an input.
+    { head: 'NON-TAXABLE INCOME', key: 'nonTaxTotal', width: 13, alias: ['NON TAXABLE INCOME', 'NONTAXABLE INCOME'] },
     { head: 'DAYS ABSENT', key: 'absentDays', input: 'absentDays', width: 9 },
     { head: 'DAYS ABSENT DEDUCTION', key: 'absenceDeduction', width: 12, alias: ['ABSENT DEDUCTION'] },
     { head: 'LATE MINUTES', key: 'lateMinutes', input: 'lateMinutes', width: 9 },
@@ -109,7 +110,7 @@
     newRate: 'monthly, e.g. 45,000.00', newRateDate: 'date, e.g. 2026-09-15',
     otHours: 'hours, e.g. 2.5', ndHours: 'hours, e.g. 1.5',
     quarterlyBonus: 'amount, e.g. 5,000.00', bonusDetails: 'text; ";" between items',
-    commission: 'amount, e.g. 5,000.00', nonTaxIncome: 'amount, e.g. 1,000.00',
+    commission: 'amount, e.g. 5,000.00',
     exMilestones: 'amount, e.g. 10,000.00', ptoPay: 'amount, e.g. 2,000.00',
     travel: 'amount, e.g. 800.00', absentDays: 'days, e.g. 1 or 0.5',
     lateMinutes: 'minutes, e.g. 15', undertimeMinutes: 'minutes, e.g. 30',
@@ -199,11 +200,13 @@
       // Rest-day work and rest-day / holiday overtime (OT 1.69, OT 2.60,
       // Rest 1.30) go in SALARY ADJ beside any back pay; Remarks names them.
       var restDayWork = E2(e.otPayRestSpecial + e.otPayRegHoliday + e.restDayPay);
-      // Recurring non-taxable items other than the two with columns here.
-      var otherNonTax = E2(e.totalNonTaxAllowance - (e.companyBonus || 0) - (e.ptoPay || 0));
+      // Non-taxable pay with no column here: recurring items, the year-end
+      // bonus, leave monetization, older non-taxable income.
+      var otherNonTax = E2(e.totalNonTaxAllowance - (e.companyBonus || 0) - (e.ptoPay || 0) + (e.nonTaxableIncome || 0));
       var extraGross = E2((at.commission ? 0 : e.commission || 0) + e.holidayPay +
         e.totalTaxableAllowance - backPay + otherNonTax);
-      var extraNonTax = E2(otherNonTax + e.thirteenthExempt);
+      // The part of the 13th month over the ₱90,000 ceiling is taxable.
+      var thirteenthTaxed = E2(e.thirteenthMonth - e.thirteenthExempt);
       var extraNet = E2(p.reimbursement + p.taxRefund);
       var autoOther = E2(p.otherLoanAuto + s.totalOtherDeductions);
       var mand = settings.replicateSheetFormula
@@ -234,9 +237,11 @@
         quarterlyBonus: inp(e.quarterlyBonus),
         bonusDetails: { v: e.quarterlyBonusDetails || '', t: 's', s: S.INPUT },
         commission: inp(e.commission),
-        nonTaxIncome: inp(e.nonTaxableIncome),
         salaryAdj: n(E2(backPay + restDayWork)),
         travel: inp(e.transportationGiven),
+        nonTaxTotal: f(C('thirteenth') + (thirteenthTaxed ? '-' + thirteenthTaxed : '') + '+' + C('exMilestones') + '+(' +
+          C('deMinimis') + '-' + C('dmDeduction') + ')+' + C('ptoPay') + '+(' + C('travel') + '-' + C('travelDeduction') + ')' +
+          (otherNonTax ? '+' + otherNonTax : '')),
         absentDays: inp(d.absentDays + d.unpaidLeaveDays),
         absenceDeduction: f('ROUND(' + daily + '*' + C('absentDays') + ',2)'),
         lateMinutes: inp(d.lateMinutes),
@@ -247,14 +252,13 @@
         dmDeduction: n(e.deMinimisDeduction),
         travelDeduction: inp(e.travelDeduction),
         gross: f(C('regularPay') + '+' + C('otPay') + '+' + C('ndPay') + '+' + C('deMinimis') + '+' +
-          C('quarterlyBonus') + (at.commission ? '+' + C('commission') : '') + '+' + C('nonTaxIncome') + '+' +
+          C('quarterlyBonus') + (at.commission ? '+' + C('commission') : '') + '+' +
           C('thirteenth') + '+' + C('exMilestones') + '+' + C('ptoPay') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
           C('lateDeduction') + '-' + C('undertimeDeduction') + '-' + C('prorationDeduction') + '-' +
           C('dmDeduction') + '-' + C('travelDeduction') + (extraGross ? '+' + extraGross : '')),
         sss: n(c.sss), phic: n(c.philhealth), hdmf: n(c.pagibig),
         afterMandatories: f(C('gross') + '-(' + mand + ')'),
-        netTaxable: f('MAX(0,' + C('afterMandatories') + '-(' + C('deMinimis') + '-' + C('dmDeduction') +
-          ')-(' + C('travel') + '-' + C('travelDeduction') + ')-' + C('nonTaxIncome') + '-' + C('exMilestones') + '-' + C('ptoPay') + (extraNonTax ? '-' + extraNonTax : '') + ')'),
+        netTaxable: f('MAX(0,' + C('afterMandatories') + '-' + C('nonTaxTotal') + ')'),
         tax: settings.applyWithholdingTax ? f(taxFormula(C('netTaxable'), settings.taxTable)) : n(0),
         tendo: inp(p.tendoPay),
         hmo: inp(p.hmo),

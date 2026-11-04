@@ -1159,12 +1159,12 @@
     var ye = settings.yearEnd;
     var ytd = yearToDate(emp, year, dtrMap, settings, null);
     var thirteenth = r2(ytd.basicEarned / (ye.thirteenthMonthDivisor || 12));
-    /* The 2316 guide (Japheth, 29 Oct 2026), item 34: the 13th month, the
-       anniversary bonus (ex milestones) and the quarterly bonus share the
-       yearly exempt ceiling. Transport is de minimis (item 35), outside it.
-       Whatever they pass the ceiling by is taxable (item 48), taken off the
-       13th month first. */
-    var benefits = r2(thirteenth + ytd.companyBonus + ytd.quarterlyBonus);
+    /* The ₱90,000 ceiling covers the 13th month and the quarterly bonus
+       (Japheth, 4 Nov 2026). The anniversary bonus (ex milestones) is
+       non-taxable outside it, like de minimis, PTO and transport. Whatever
+       the two pass the ceiling by is taxable (item 48), taken off the 13th
+       month first. */
+    var benefits = r2(thirteenth + ytd.quarterlyBonus);
     /* The year-end non-taxable bonus is paid with the 13th month: the full
        amount for a full year, pro rata by months worked otherwise. It is
        outside the ceiling and never taxed (item 35). */
@@ -1305,7 +1305,8 @@
     var i45 = r2(commission), i48 = r2(ye.thirteenthTaxable), i50 = r2(ot), i51 = r2(others);
     var i52 = r2(ye.annualTaxableIncome - ye.previousTaxable);
     var i39 = r2(i52 - i45 - i48 - i50 - i51);
-    var i34 = r2(ye.thirteenthExempt);
+    // 13th month and quarterly bonus within the ceiling, plus the anniversary bonus.
+    var i34 = r2(ye.thirteenthExempt + (ye.companyBonus || 0));
     var i35 = r2(ytd.deMinimis + ytd.transport + pto + ye.yearEndBonus);
     var i36 = r2(mand), i37 = r2(ytd.nonTaxableIncome || 0);   // the NON-TAXABLE INCOME column
     var i38 = r2(i34 + i35 + i36 + i37);

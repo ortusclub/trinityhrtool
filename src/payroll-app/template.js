@@ -43,10 +43,6 @@
     { head: 'REGULAR OVERTIME PAY', key: 'otPay', width: 12 },
     { head: 'NIGHT DIFFERENTIAL HOURS', key: 'ndHours', input: 'ndHours', width: 12 },
     { head: 'NIGHT DIFFERENTIAL PAY', key: 'ndPay', width: 12 },
-    { head: 'DE MINIMIS (DM)', key: 'deMinimis', width: 11 },
-    { head: 'QUARTERLY BONUS TAXABLE', key: 'quarterlyBonus', input: 'quarterlyBonus', width: 12 },
-    // What the bonus is for, printed under it on the payslip.
-    { head: 'QUARTERLY BONUS DETAILS', key: 'bonusDetails', input: 'bonusDetails', width: 28 },
     // Taxable; BIR 2316 item 45.
     // Not written to the template or the summary (sheet: false), but still
     // read from a file that has the column.
@@ -59,6 +55,19 @@
     // and its date); older files' salary adjustment column reads into it.
     { head: 'SALARY ADJ (BACK PAY)', key: 'salaryAdj', width: 13,
       alias: ['ADHOC PAYMENT - SALARY ADJ', 'ADHOC PAYMENT - SALARY ADJUSTMENT', 'SALARY ADJ', 'SALARY ADJUSTMENT'] },
+    // The year's benefits, together before the allowances. 13th month is
+    // worked out on the site (Year-End); anniversary bonus (ex milestones)
+    // and PTO are entered; de minimis is the standard amount.
+    { head: '13TH MONTH', key: 'thirteenth', width: 12, alias: ['13TH MONTH PAY'] },
+    { head: 'ANNIVERSARY BONUS', key: 'exMilestones', input: 'exMilestones', width: 12,
+      alias: ['EX MILESTONES', 'EX MILESTONE'] },
+    { head: 'QUARTERLY BONUS', key: 'quarterlyBonus', input: 'quarterlyBonus', width: 12,
+      alias: ['QUARTERLY BONUS TAXABLE'] },
+    // What the bonus is for, printed under it on the payslip.
+    { head: 'QUARTERLY BONUS DETAILS', key: 'bonusDetails', input: 'bonusDetails', width: 28 },
+    { head: 'DE MINIMIS', key: 'deMinimis', width: 11, alias: ['DE MINIMIS (DM)'] },
+    // Unused leave converted to cash: non-taxable, BIR 2316 item 35.
+    { head: 'PTO', key: 'ptoPay', input: 'ptoPay', width: 12, alias: ['PTO PAY'] },
     { head: 'TRAVEL ALLOWANCE', key: 'travel', input: 'transportationAllowance', width: 12,
       alias: ['TRANSPORTATION ALLOWANCE'] },
     { head: 'DAYS ABSENT', key: 'absentDays', input: 'absentDays', width: 9 },
@@ -101,6 +110,7 @@
     otHours: 'hours, e.g. 2.5', ndHours: 'hours, e.g. 1.5',
     quarterlyBonus: 'amount, e.g. 5,000.00', bonusDetails: 'text; ";" between items',
     commission: 'amount, e.g. 5,000.00', nonTaxIncome: 'amount, e.g. 1,000.00',
+    exMilestones: 'amount, e.g. 10,000.00', ptoPay: 'amount, e.g. 2,000.00',
     travel: 'amount, e.g. 800.00', absentDays: 'days, e.g. 1 or 0.5',
     lateMinutes: 'minutes, e.g. 15', undertimeMinutes: 'minutes, e.g. 30',
     travelDeduction: 'amount, e.g. 200.00', tendo: 'amount, e.g. 1,000.00', hmo: 'amount, e.g. 1,000.00',
@@ -189,9 +199,11 @@
       // Rest-day work and rest-day / holiday overtime (OT 1.69, OT 2.60,
       // Rest 1.30) go in SALARY ADJ beside any back pay; Remarks names them.
       var restDayWork = E2(e.otPayRestSpecial + e.otPayRegHoliday + e.restDayPay);
+      // Recurring non-taxable items other than the two with columns here.
+      var otherNonTax = E2(e.totalNonTaxAllowance - (e.companyBonus || 0) - (e.ptoPay || 0));
       var extraGross = E2((at.commission ? 0 : e.commission || 0) + e.holidayPay +
-        e.thirteenthMonth + e.totalTaxableAllowance - backPay + e.totalNonTaxAllowance);
-      var extraNonTax = E2(e.totalNonTaxAllowance + e.thirteenthExempt);
+        e.totalTaxableAllowance - backPay + otherNonTax);
+      var extraNonTax = E2(otherNonTax + e.thirteenthExempt);
       var extraNet = E2(p.reimbursement + p.taxRefund);
       var autoOther = E2(p.otherLoanAuto + s.totalOtherDeductions);
       var mand = settings.replicateSheetFormula
@@ -215,6 +227,9 @@
         otPay: rf ? f('ROUND(' + hourly + '*' + prem.ot + '*' + C('otHours') + ',2)') : n(0),
         ndHours: inp(d.ndHours),
         ndPay: rf ? f('ROUND(' + hourly + '*' + prem.nd + '*' + C('ndHours') + ',2)') : n(0),
+        thirteenth: n(e.thirteenthMonth),
+        exMilestones: inp(e.companyBonus),
+        ptoPay: inp(e.ptoPay),
         deMinimis: n(e.deMinimisAuto.full),
         quarterlyBonus: inp(e.quarterlyBonus),
         bonusDetails: { v: e.quarterlyBonusDetails || '', t: 's', s: S.INPUT },
@@ -232,13 +247,14 @@
         dmDeduction: n(e.deMinimisDeduction),
         travelDeduction: inp(e.travelDeduction),
         gross: f(C('regularPay') + '+' + C('otPay') + '+' + C('ndPay') + '+' + C('deMinimis') + '+' +
-          C('quarterlyBonus') + (at.commission ? '+' + C('commission') : '') + '+' + C('nonTaxIncome') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
+          C('quarterlyBonus') + (at.commission ? '+' + C('commission') : '') + '+' + C('nonTaxIncome') + '+' +
+          C('thirteenth') + '+' + C('exMilestones') + '+' + C('ptoPay') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
           C('lateDeduction') + '-' + C('undertimeDeduction') + '-' + C('prorationDeduction') + '-' +
           C('dmDeduction') + '-' + C('travelDeduction') + (extraGross ? '+' + extraGross : '')),
         sss: n(c.sss), phic: n(c.philhealth), hdmf: n(c.pagibig),
         afterMandatories: f(C('gross') + '-(' + mand + ')'),
         netTaxable: f('MAX(0,' + C('afterMandatories') + '-(' + C('deMinimis') + '-' + C('dmDeduction') +
-          ')-(' + C('travel') + '-' + C('travelDeduction') + ')-' + C('nonTaxIncome') + (extraNonTax ? '-' + extraNonTax : '') + ')'),
+          ')-(' + C('travel') + '-' + C('travelDeduction') + ')-' + C('nonTaxIncome') + '-' + C('exMilestones') + '-' + C('ptoPay') + (extraNonTax ? '-' + extraNonTax : '') + ')'),
         tax: settings.applyWithholdingTax ? f(taxFormula(C('netTaxable'), settings.taxTable)) : n(0),
         tendo: inp(p.tendoPay),
         hmo: inp(p.hmo),

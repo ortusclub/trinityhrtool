@@ -552,6 +552,12 @@
       items.nonTaxAllowances.push({ label: 'Ex Milestones (company bonus)', amount: exMilestones });
       items.totalNonTaxAllowance = r2(items.totalNonTaxAllowance + exMilestones);
     }
+    // PTO: unused leave converted to cash — non-taxable (BIR 2316 item 35).
+    var ptoPay = num(dtr.ptoPay);
+    if (ptoPay) {
+      items.nonTaxAllowances.push({ label: 'PTO (unused leave converted)', amount: ptoPay });
+      items.totalNonTaxAllowance = r2(items.totalNonTaxAllowance + ptoPay);
+    }
 
     /* ----------------------- GROSS PAY (col T) ------------------------- */
     var grossPay = r2(regularPay + otPay + ndPay + restDayPay + holidayPay +
@@ -648,6 +654,7 @@
         deMinimisDeduction: r2(dmAuto.full - deMinimis),
         transportationGiven: transportationGiven,
         companyBonus: exMilestones,
+        ptoPay: ptoPay,
         travelDeduction: travelDeduction,
         otPayRegular: otPayRegular,
         otPayRestSpecial: otPayRestSpecial,
@@ -776,8 +783,10 @@
       .filter(function (x) { return v(x[1]); })
       .map(function (x) { return { label: x[0], amount: v(x[1]) }; });
     e.nonTaxAllowances = v('exMilestones') ? [{ label: 'Ex Milestones (company bonus)', amount: v('exMilestones') }] : [];
+    e.ptoPay = v('ptoPay');
+    if (e.ptoPay) e.nonTaxAllowances.push({ label: 'PTO (unused leave converted)', amount: e.ptoPay });
     e.totalTaxableAllowance = r2(v('basicAdj') + v('salaryAdj'));
-    e.totalNonTaxAllowance = v('exMilestones');
+    e.totalNonTaxAllowance = r2(v('exMilestones') + e.ptoPay);
     e.companyBonus = v('exMilestones');
     e.grossPay = v('gross');
     /* Basic actually earned — what 13th month is a twelfth of: the cutoff's
@@ -800,7 +809,7 @@
     slip.tax.taxableIncome = v('netTaxable');
     slip.tax.withholding = a('tax');
     e.grossTaxable = slip.tax.taxableIncome;
-    e.nonTaxable = r2(e.deMinimis + e.transportationAllowance + e.thirteenthExempt + e.companyBonus + e.nonTaxableIncome);
+    e.nonTaxable = r2(e.deMinimis + e.transportationAllowance + e.thirteenthExempt + e.companyBonus + e.nonTaxableIncome + e.ptoPay);
 
     var pt = slip.postTax;
     pt.tendoPay = a('tendo'); pt.hmo = a('hmo'); pt.otherDeduction = a('other');

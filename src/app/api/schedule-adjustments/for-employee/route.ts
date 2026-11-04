@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hasRole } from "@/lib/utils";
+import { shiftLengthError } from "@/lib/shift-length";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -35,6 +36,11 @@ export async function POST(request: Request) {
       { error: "employee_id, requested_date, and adjustment_type are required" },
       { status: 400 }
     );
+  }
+
+  if (adjustment_type === "time" || adjustment_type === "both") {
+    const tooLong = shiftLengthError(requested_start_time, requested_end_time);
+    if (tooLong) return NextResponse.json({ error: tooLong }, { status: 400 });
   }
 
   const admin = createAdminClient();

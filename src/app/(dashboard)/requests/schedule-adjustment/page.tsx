@@ -10,6 +10,7 @@ import type { ScheduleAdjustmentType, WorkLocation } from "@/types/database";
 import { WeeklyScheduleEditor } from "@/components/profile/weekly-schedule-editor";
 import { hasNightDifferentialHours } from "@/lib/utils";
 import { NightDiffBanner } from "@/components/shared/night-diff-banner";
+import { shiftLengthError } from "@/lib/shift-length";
 
 type ScheduleRow = {
   id: string;
@@ -305,6 +306,13 @@ export default function ScheduleAdjustmentPage() {
 
     if (!user) {
       setError("Not authenticated");
+      setLoading(false);
+      return;
+    }
+
+    const tooLong = showTimeFields ? shiftLengthError(requestedStart, requestedEnd) : null;
+    if (tooLong) {
+      setError(tooLong);
       setLoading(false);
       return;
     }

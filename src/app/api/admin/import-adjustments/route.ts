@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { shiftLengthError } from "@/lib/shift-length";
 
 export const maxDuration = 60;
 
@@ -160,6 +161,13 @@ export async function POST(request: Request) {
 
       if (!/^\d{1,2}:\d{2}$/.test(row.requestedStartTime) || !/^\d{1,2}:\d{2}$/.test(row.requestedEndTime)) {
         results.errors.push(`Row ${rowNum}: invalid time format (use HH:MM)`);
+        results.skipped++;
+        continue;
+      }
+
+      const tooLong = shiftLengthError(row.requestedStartTime, row.requestedEndTime);
+      if (tooLong) {
+        results.errors.push(`Row ${rowNum}: ${tooLong}`);
         results.skipped++;
         continue;
       }

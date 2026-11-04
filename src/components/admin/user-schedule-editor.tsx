@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { DAYS_OF_WEEK } from "@/lib/constants";
+import { shiftLengthError } from "@/lib/shift-length";
 
 interface ScheduleRow {
   id: string;
@@ -66,6 +67,13 @@ export function UserScheduleEditor({
   };
 
   const handleSave = async () => {
+    for (let d = 0; d < 7; d++) {
+      const tooLong = days[d].is_rest_day ? null : shiftLengthError(days[d].start_time, days[d].end_time);
+      if (tooLong) {
+        setMessage(`${DAYS_OF_WEEK[d] ?? "Day " + d}: ${tooLong}`);
+        return;
+      }
+    }
     setSaving(true);
     setMessage("");
     const supabase = createClient();

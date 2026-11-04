@@ -3148,9 +3148,8 @@
         line('Year-end non-taxable bonus: ' + plain(state.settings.yearEnd.yearEndBonus) + ' × ' + y.monthsWorked +
           ' month' + (y.monthsWorked === 1 ? '' : 's') + ' worked ÷ 12', plain(y.yearEndBonus)) +
         line('<strong>Expected at the 13th month payout</strong>', '<strong>' + plain(E.r2(y.thirteenthBalance + y.yearEndBonus)) + '</strong>', 'net') +
-        line('<em>Exempt ceiling — shared (BIR 2316 item 34; transport is de minimis, outside it)</em>', '') +
+        line('<em>₱90,000 ceiling — 13th month and quarterly bonus (anniversary bonus, de minimis, PTO and transport are outside it)</em>', '') +
         line('Quarterly bonus this year (taxed in the cutoffs)', plain(y.quarterlyBonus)) +
-        line('Ex milestones (anniversary bonus) this year', plain(y.companyBonus)) +
         line('13th month', plain(y.thirteenthMonth)) +
         line('Total', plain(y.benefits), 'strong') +
         line('Less the ceiling', '−' + plain(ceiling)) +
@@ -3347,7 +3346,7 @@
       stat('13th month still to pay', peso(E.r2(sum.balance13)), peso(E.r2(sum.thirteenth)) + ' for the year − ' +
         peso(E.r2(sum.paid13)) + ' already paid', 'accent'),
       stat('Tax-exempt portion', peso(E.r2(sum.exempt)),
-        '13th month + year-end, quarterly and anniversary bonus, ceiling ' + peso(state.settings.yearEnd.thirteenthMonthExemption) + ' each'),
+        '13th month + quarterly bonus, ceiling ' + peso(state.settings.yearEnd.thirteenthMonthExemption) + ' each'),
       stat('Taxable portion', peso(E.r2(sum.taxable)), 'over the ceiling — BIR 2316 item 48'),
       stat('Net tax adjustment', peso(E.r2(sum.adj)), refunds + ' refundable \u00b7 ' + dues + ' still due',
         sum.adj >= 0 ? 'green' : '')

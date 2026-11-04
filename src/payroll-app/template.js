@@ -182,7 +182,10 @@
       var backPay = E2((e.taxableAllowances || []).reduce(function (t, a) {
         return /back pay|^salary adjustment$/i.test(a.label) ? t + a.amount : t;
       }, 0));
-      var extraGross = E2(e.otPayRestSpecial + e.otPayRegHoliday + e.restDayPay + e.holidayPay +
+      // Rest-day work and rest-day / holiday overtime (OT 1.69, OT 2.60,
+      // Rest 1.30) go in SALARY ADJ beside any back pay; Remarks names them.
+      var restDayWork = E2(e.otPayRestSpecial + e.otPayRegHoliday + e.restDayPay);
+      var extraGross = E2(e.holidayPay +
         e.thirteenthMonth + e.totalTaxableAllowance - backPay + e.totalNonTaxAllowance);
       var extraNonTax = E2(e.totalNonTaxAllowance + e.thirteenthExempt);
       var extraNet = E2(p.reimbursement + p.taxRefund);
@@ -213,7 +216,7 @@
         bonusDetails: { v: e.quarterlyBonusDetails || '', t: 's', s: S.INPUT },
         commission: inp(e.commission),
         nonTaxIncome: inp(e.nonTaxableIncome),
-        salaryAdj: n(backPay),
+        salaryAdj: n(E2(backPay + restDayWork)),
         travel: inp(e.transportationGiven),
         absentDays: inp(d.absentDays + d.unpaidLeaveDays),
         absenceDeduction: f('ROUND(' + daily + '*' + C('absentDays') + ',2)'),

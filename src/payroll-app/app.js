@@ -1111,11 +1111,11 @@
         var x = splitOtNd(p, period), set = false;
         OTND_FIELDS.forEach(function (f) { if (!E.num(d[f]) && x[f]) { d[f] = x[f]; set = true; } });
         // The template has one OT column (1.25); rest-day and holiday OT is
-        // paid through GROSS PAY and named in Remarks.
+        // paid in SALARY ADJ and named in Remarks.
         var odd = x.detail.otRestSpecialHours.map(function (t) { return t + ' (OT 1.69)'; })
           .concat(x.detail.otRegHolidayHours.map(function (t) { return t + ' (OT 2.60)'; }));
         if (odd.length && x.otRestSpecialHours + x.otRegHolidayHours) {
-          d.remarks = (d.remarks ? d.remarks + '; ' : '') + 'Rest day / holiday OT: ' + odd.join(', ');
+          d.remarks = (d.remarks ? d.remarks + '; ' : '') + 'In SALARY ADJ \u2014 rest day / holiday OT: ' + odd.join(', ');
           flagged.push(emp.lastName + ', ' + emp.firstName + ' — ' + odd.join(', '));
         }
         if (set) { dtr[key] = d; filled++; }
@@ -1124,7 +1124,7 @@
       note.innerHTML = '<div class="notice" style="margin-bottom:12px">OT and ND hours from TrinityHR filled in the template for ' +
         filled + ' employee(s) — approved overtime requests and scheduled night shifts, ' +
         esc(E.fmtShort(E.parseYmd(period.start))) + ' – ' + esc(E.fmtShort(E.parseYmd(period.end))) + '.' +
-        (flagged.length ? '<br>Overtime on a rest day or holiday — paid at 1.69 / 2.60 in GROSS PAY and named in Remarks: ' +
+        (flagged.length ? '<br>Overtime on a rest day or holiday \u2014 paid at 1.69 / 2.60 in SALARY ADJ and named in Remarks: ' +
           flagged.map(esc).join('; ') : '') + '</div>';
       save(dtr, run);
     }).catch(function (e) {

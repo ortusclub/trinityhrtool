@@ -659,12 +659,13 @@
      and on every cell, with the TrinityHR days behind the figure. */
   function multiplierWhy(field) {
     var pr = state.settings.premium, pct = function (x) { return Math.round(x * 100) + '%'; };
+    var x2 = function (x) { return Number(x).toFixed(2); };
     return {
-      otHours: 'OT ' + pr.ot + '\u00d7 \u2014 overtime on a regular workday: hourly rate \u00d7 ' + pct(pr.ot) +
+      otHours: 'OT ' + x2(pr.ot) + '\u00d7 \u2014 overtime on a regular workday: hourly rate \u00d7 ' + pct(pr.ot) +
         ' (Labor Code Art. 87).',
-      otRestSpecialHours: 'OT ' + pr.otRestDaySpecial + '\u00d7 \u2014 overtime on a rest day or a special non-working day: ' +
+      otRestSpecialHours: 'OT ' + x2(pr.otRestDaySpecial) + '\u00d7 \u2014 overtime on a rest day or a special non-working day: ' +
         'hourly rate \u00d7 130% (rest day / special day) \u00d7 130% (overtime) = ' + pct(pr.otRestDaySpecial) + '.',
-      otRegHolidayHours: 'OT ' + pr.otRegHoliday + '\u00d7 \u2014 overtime on a regular holiday: ' +
+      otRegHolidayHours: 'OT ' + x2(pr.otRegHoliday) + '\u00d7 \u2014 overtime on a regular holiday: ' +
         'hourly rate \u00d7 200% (regular holiday) \u00d7 130% (overtime) = ' + pct(pr.otRegHoliday) + '.',
       ndHours: 'ND \u2014 work between 10 PM and 6 AM: hourly rate \u00d7 ' + pct(pr.nd) +
         ' per hour (Art. 86), on scheduled shifts and on overtime.',

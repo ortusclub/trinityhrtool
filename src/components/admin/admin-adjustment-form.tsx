@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
 import type { ScheduleAdjustmentType, WorkLocation } from "@/types/database";
+import { shiftLengthError } from "@/lib/shift-length";
 
 export function AdminAdjustmentForm({ userId }: { userId: string }) {
   const router = useRouter();
@@ -35,6 +36,11 @@ export function AdminAdjustmentForm({ userId }: { userId: string }) {
     }
     if (showTimeFields && (!startTime || !endTime)) {
       setMessage("Please set start and end times.");
+      return;
+    }
+    const tooLong = showTimeFields ? shiftLengthError(startTime, endTime) : null;
+    if (tooLong) {
+      setMessage(tooLong);
       return;
     }
 

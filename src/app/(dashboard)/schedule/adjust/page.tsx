@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { shiftLengthError } from "@/lib/shift-length";
 
 export default function ScheduleAdjustPage() {
   const router = useRouter();
@@ -52,6 +53,13 @@ export default function ScheduleAdjustPage() {
 
     const originalStart = schedule?.start_time ?? form.original_start_time;
     const originalEnd = schedule?.end_time ?? form.original_end_time;
+
+    const tooLong = shiftLengthError(form.requested_start_time, form.requested_end_time);
+    if (tooLong) {
+      setError(tooLong);
+      setLoading(false);
+      return;
+    }
 
     const { error: insertError } = await supabase
       .from("schedule_adjustments")

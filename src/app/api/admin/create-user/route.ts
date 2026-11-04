@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/resend";
 import { loadAndRender } from "@/lib/email/render";
 import { getUniversalVars } from "@/lib/email/universal-vars";
+import { shiftLengthError } from "@/lib/shift-length";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -105,6 +106,9 @@ export async function POST(request: Request) {
     const userId = authData.user.id;
 
     for (const day of schedule) {
+      // A shift over 16 hours is a typo (12:00 for midnight): keep the
+      // user, leave that day off the schedule.
+      if (!day.is_rest_day && shiftLengthError(day.start_time, day.end_time)) continue;
       await admin.from("schedules").insert({
         employee_id: userId,
         day_of_week: day.day_of_week,

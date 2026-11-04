@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { shiftLengthError } from "@/lib/shift-length";
 
 export const maxDuration = 60;
 
@@ -453,6 +454,14 @@ export async function POST(request: Request) {
 
         const userId = emailToId.get(row.email);
         if (!userId) continue;
+
+        const tooLong = row.days
+          .map((d) => (d && d !== "rest" ? shiftLengthError(d.start, d.end) : null))
+          .find(Boolean);
+        if (tooLong) {
+          results.errors.push(`${row.email}: schedule not imported — ${tooLong}`);
+          continue;
+        }
 
         userIdsWithSchedules.push(userId);
 

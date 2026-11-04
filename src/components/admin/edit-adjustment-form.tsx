@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Pencil, Save, X } from "lucide-react";
 import type { ScheduleAdjustmentType, WorkLocation } from "@/types/database";
+import { shiftLengthError } from "@/lib/shift-length";
 
 interface Props {
   id: string;
@@ -36,6 +37,8 @@ export function EditAdjustmentForm(props: Props) {
   const showLoc = form.adjustment_type === "location" || form.adjustment_type === "both";
 
   const save = async () => {
+    const tooLong = showTime ? shiftLengthError(form.requested_start_time, form.requested_end_time) : null;
+    if (tooLong) { setError(tooLong); return; }
     setBusy(true);
     setError(null);
     const supabase = createClient();

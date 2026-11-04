@@ -1,5 +1,6 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { AUTO_POPULATED_BUILT_IN_KEYS } from "@/lib/profile-fields";
+import { shiftLengthError } from "@/lib/shift-length";
 
 export type BulkImportPayload = {
   rows: Array<{
@@ -343,6 +344,11 @@ export async function applyScheduleWeeklyChange(
   let cellsWritten = 0;
   const errors: string[] = [];
   for (const d of p.days) {
+    const tooLong = d.is_rest_day ? null : shiftLengthError(d.start_time, d.end_time);
+    if (tooLong) {
+      errors.push(`Day ${d.day_of_week}: ${tooLong}`);
+      continue;
+    }
     const row = {
       employee_id: p.employee_id,
       day_of_week: d.day_of_week,

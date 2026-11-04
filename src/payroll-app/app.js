@@ -153,15 +153,43 @@
     return folded;
   }
 
-  /* OT and ND hours from TrinityHR, straight into the cutoff's timesheet:
-     approved overtime requests on workdays (OT 1.25) and the night part of
-     scheduled shifts worked plus of the overtime (ND HRS). Read once per
-     cutoff a session. Hours they set are marked otNdFrom = 'trinity' and
-     follow TrinityHR on every read (an approval or cancellation since shows
-     next time); hours an imported file set are left alone. Overtime on a
-     rest day or holiday is not at 1.25 — it is kept aside in otNdCheck and
-     shown, to be entered by hand. */
+  /* OT and ND hours from TrinityHR, straight into the cutoff's timesheet.
+     Approved overtime requests go by the day they were worked: a workday
+     into OT 1.25, a rest day or special non-working day into OT 1.69, a
+     regular holiday into OT 2.60. ND HRS is the night part of scheduled
+     shifts worked plus of the overtime. Read once per cutoff a session.
+     Hours set here are marked otNdFrom = 'trinity' and follow TrinityHR on
+     every read (an approval or cancellation since shows next time); hours
+     an imported file set are left alone. The days behind each figure are
+     kept in otNdDetail and shown on hover. */
   var otNd = { done: {} };
+  var OTND_FIELDS = ['otHours', 'otRestSpecialHours', 'otRegHolidayHours', 'ndHours'];
+
+  /** Splits a person's TrinityHR overtime by the kind of day it was worked. */
+  function splitOtNd(p, period) {
+    var hol = {};
+    E.holidaysInPeriod(period, state.holidays, state.settings).forEach(function (h) { hol[h.date] = h; });
+    var wd = state.settings.schedule.workDays;
+    var out = { otHours: 0, otRestSpecialHours: 0, otRegHolidayHours: 0, ndHours: p ? p.scheduledNd : 0,
+      detail: { otHours: [], otRestSpecialHours: [], otRegHolidayHours: [], ndHours: [] } };
+    if (p && p.scheduledNd) out.detail.ndHours.push(p.scheduledNd + 'h on scheduled night shifts');
+    (p ? p.ot : []).forEach(function (o) {
+      var day = E.parseYmd(o.date), h = hol[o.date];
+      var label = DAYNAMES[day.getDay()].slice(0, 3) + ' ' + E.fmtShort(day) + ' ' + o.hours + 'h';
+      var f = h && h.type === 'regular' ? 'otRegHolidayHours'
+        : h || wd.indexOf(day.getDay()) === -1 ? 'otRestSpecialHours' : 'otHours';
+      out[f] += o.hours;
+      out.detail[f].push(label + (h ? ' — ' + h.name + (h.type === 'regular' ? '' : ' (special)')
+        : f === 'otRestSpecialHours' ? ' — rest day' : ''));
+      if (o.ndHours) {
+        out.ndHours += o.ndHours;
+        out.detail.ndHours.push(o.ndHours + 'h of overtime on ' + E.fmtShort(day));
+      }
+    });
+    OTND_FIELDS.forEach(function (f) { out[f] = out[f] ? E.r2(out[f]) : null; });
+    return out;
+  }
+
   function syncOtNd(period) {
     // Paid cutoffs stay as they were paid.
     if (otNd.done[period.id] || E.isPostedPeriod(state.dtr, period.id) || paidOf(period.id)) return;
@@ -170,28 +198,22 @@
       otNd.done[period.id] = true;
       var byEmail = {};
       (data.people || []).forEach(function (p) { byEmail[p.email] = p; });
-      var holiday = {};
-      E.holidaysInPeriod(period, state.holidays, state.settings).forEach(function (h) { holiday[h.date] = h.name; });
-      var wd = state.settings.schedule.workDays, changed = false;
+      var changed = false;
       (state.period.id === period.id ? state.runEmployees : []).forEach(function (emp) {
         var key = period.id + '|' + emp.id, d = state.dtr[key] || {};
         if (d.posted) return;
-        var ours = d.otNdFrom === 'trinity' || (!E.num(d.otHours) && !E.num(d.ndHours));
+        var ours = d.otNdFrom === 'trinity' || OTND_FIELDS.every(function (f) { return !E.num(d[f]); });
         if (!ours) return;
-        var p = byEmail[String(emp.email || '').trim().toLowerCase()];
-        var ot = 0, nd = p ? p.scheduledNd : 0, odd = [];
-        (p ? p.ot : []).forEach(function (o) {
-          nd += o.ndHours;
-          var day = E.parseYmd(o.date), why = holiday[o.date] || (wd.indexOf(day.getDay()) === -1 ? 'rest day' : '');
-          if (why) odd.push(E.fmtShort(day) + ' ' + o.hours + 'h (' + why + ')');
-          else ot += o.hours;
-        });
-        var next = { otHours: ot ? E.r2(ot) : null, ndHours: nd ? E.r2(nd) : null, otNdCheck: odd.length ? odd.join(', ') : null };
-        var has = next.otHours || next.ndHours || next.otNdCheck;
+        var next = splitOtNd(byEmail[String(emp.email || '').trim().toLowerCase()], period);
+        var has = OTND_FIELDS.some(function (f) { return next[f]; });
         if (!has && d.otNdFrom !== 'trinity') return;
-        if (d.otHours === next.otHours && d.ndHours === next.ndHours && d.otNdCheck === next.otNdCheck) return;
-        d.otHours = next.otHours; d.ndHours = next.ndHours; d.otNdCheck = next.otNdCheck;
-        if (has) { d.otNdFrom = 'trinity'; d.ndManual = true; } else { delete d.otNdFrom; delete d.otNdCheck; }
+        var same = OTND_FIELDS.every(function (f) { return (d[f] || null) === next[f]; }) &&
+          JSON.stringify(d.otNdDetail || null) === JSON.stringify(has ? next.detail : null) && !d.otNdCheck;
+        if (same) return;
+        OTND_FIELDS.forEach(function (f) { d[f] = next[f]; });
+        delete d.otNdCheck;
+        if (has) { d.otNdFrom = 'trinity'; d.ndManual = true; d.otNdDetail = next.detail; }
+        else { delete d.otNdFrom; delete d.otNdDetail; }
         state.dtr[key] = d;
         changed = true;
       });
@@ -633,13 +655,32 @@
   }
 
   /** Under OT 1.25 / ND HRS: where the hours came from, and OT to check. */
-  function otNdNote(emp, which) {
+  /* Why each hour column pays what it does — shown on hover, on the header
+     and on every cell, with the TrinityHR days behind the figure. */
+  function multiplierWhy(field) {
+    var pr = state.settings.premium, pct = function (x) { return Math.round(x * 100) + '%'; };
+    return {
+      otHours: 'OT ' + pr.ot + '\u00d7 \u2014 overtime on a regular workday: hourly rate \u00d7 ' + pct(pr.ot) +
+        ' (Labor Code Art. 87).',
+      otRestSpecialHours: 'OT ' + pr.otRestDaySpecial + '\u00d7 \u2014 overtime on a rest day or a special non-working day: ' +
+        'hourly rate \u00d7 130% (rest day / special day) \u00d7 130% (overtime) = ' + pct(pr.otRestDaySpecial) + '.',
+      otRegHolidayHours: 'OT ' + pr.otRegHoliday + '\u00d7 \u2014 overtime on a regular holiday: ' +
+        'hourly rate \u00d7 200% (regular holiday) \u00d7 130% (overtime) = ' + pct(pr.otRegHoliday) + '.',
+      ndHours: 'ND \u2014 work between 10 PM and 6 AM: hourly rate \u00d7 ' + pct(pr.nd) +
+        ' per hour (Art. 86), on scheduled shifts and on overtime.',
+      restDayHours: 'Rest day work, first 8 hours: hourly rate \u00d7 ' + pct(pr.restDay) + '.'
+    }[field] || '';
+  }
+  function otNdNote(emp, field) {
     var d = dtrFor(emp);
-    if (d.posted || d.otNdFrom !== 'trinity') return '';
-    if (which === 'nd') return E.num(d.ndHours) ? '<div class="auto-note">TrinityHR</div>' : '';
-    return (E.num(d.otHours) ? '<div class="auto-note">TrinityHR</div>' : '') +
-      (d.otNdCheck ? '<div class="auto-note warn" title="Overtime on a rest day or holiday — not at 1.25. Enter it in the import file if it is paid.">check: ' +
-        esc(d.otNdCheck) + '</div>' : '');
+    if (d.posted || d.otNdFrom !== 'trinity' || !E.num(d[field])) return '';
+    return '<div class="auto-note">TrinityHR</div>';
+  }
+  /** An hour cell: the input, the TrinityHR note, and the reason on hover. */
+  function hourCell(emp, field, mgr) {
+    var d = dtrFor(emp), days = !d.posted && d.otNdFrom === 'trinity' && d.otNdDetail && d.otNdDetail[field];
+    var why = multiplierWhy(field) + (days && days.length ? '\n\nFrom TrinityHR:\n' + days.join('\n') : '');
+    return '<td class="dtr" title="' + esc(why) + '">' + dtrInput(emp, field, mgr) + otNdNote(emp, field) + '</td>';
   }
 
   function remarksInput(emp) {
@@ -743,11 +784,11 @@
         cellIn('dtr', dtrInput(emp, 'ptoDays')) +
         cellIn('dtr', dtrInput(emp, 'lateMinutes')) +
         cellIn('dtr', dtrInput(emp, 'undertimeMinutes')) +
-        cellIn('dtr', dtrInput(emp, 'otHours', mgr) + otNdNote(emp, 'ot')) +
-        cellIn('dtr', dtrInput(emp, 'otRestSpecialHours', mgr)) +
-        cellIn('dtr', dtrInput(emp, 'otRegHolidayHours', mgr)) +
-        cellIn('dtr', dtrInput(emp, 'ndHours', mgr) + otNdNote(emp, 'nd')) +
-        cellIn('dtr', dtrInput(emp, 'restDayHours', mgr)) +
+        hourCell(emp, 'otHours', mgr) +
+        hourCell(emp, 'otRestSpecialHours', mgr) +
+        hourCell(emp, 'otRegHolidayHours', mgr) +
+        hourCell(emp, 'ndHours', mgr) +
+        hourCell(emp, 'restDayHours', mgr) +
         cellIn('dtr', '<div class="pair">' + dtrInput(emp, 'regHolidayDays', mgr, 42) +
           dtrInput(emp, 'specialHolidayDays', mgr, 42) + '</div>') +
 
@@ -1060,29 +1101,21 @@
     psApi('ot-nd?from=' + period.start + '&to=' + period.end).then(function (data) {
       var byEmail = {};
       (data.people || []).forEach(function (p) { byEmail[p.email] = p; });
-      var holiday = {};
-      E.holidaysInPeriod(period, state.holidays, state.settings).forEach(function (h) { holiday[h.date] = h.name; });
-      var wd = state.settings.schedule.workDays;
       var dtr = Object.assign({}, state.dtr), filled = 0, flagged = [];
       state.runEmployees.forEach(function (emp) {
         var p = byEmail[String(emp.email || '').trim().toLowerCase()];
         if (!p) return;
         var key = period.id + '|' + emp.id, d = Object.assign({}, dtr[key] || {});
         if (d.posted) return;
-        var ot = 0, nd = p.scheduledNd, odd = [];
-        p.ot.forEach(function (o) {
-          nd += o.ndHours;
-          var day = E.parseYmd(o.date), why = holiday[o.date] || (wd.indexOf(day.getDay()) === -1 ? 'rest day' : '');
-          if (why) odd.push(E.fmtShort(day) + ' ' + o.hours + 'h (' + why + ')');
-          else ot += o.hours;
-        });
-        var set = false;
-        if (!E.num(d.otHours) && ot) { d.otHours = E.r2(ot); set = true; }
-        if (!E.num(d.ndHours) && nd) { d.ndHours = E.r2(nd); set = true; }
-        if (odd.length) {
-          d.remarks = (d.remarks ? d.remarks + '; ' : '') + 'OT to check: ' + odd.join(', ');
+        var x = splitOtNd(p, period), set = false;
+        OTND_FIELDS.forEach(function (f) { if (!E.num(d[f]) && x[f]) { d[f] = x[f]; set = true; } });
+        // The template has one OT column (1.25); rest-day and holiday OT is
+        // paid through GROSS PAY and named in Remarks.
+        var odd = x.detail.otRestSpecialHours.map(function (t) { return t + ' (OT 1.69)'; })
+          .concat(x.detail.otRegHolidayHours.map(function (t) { return t + ' (OT 2.60)'; }));
+        if (odd.length && x.otRestSpecialHours + x.otRegHolidayHours) {
+          d.remarks = (d.remarks ? d.remarks + '; ' : '') + 'Rest day / holiday OT: ' + odd.join(', ');
           flagged.push(emp.lastName + ', ' + emp.firstName + ' — ' + odd.join(', '));
-          set = true;
         }
         if (set) { dtr[key] = d; filled++; }
       });
@@ -1090,7 +1123,7 @@
       note.innerHTML = '<div class="notice" style="margin-bottom:12px">OT and ND hours from TrinityHR filled in the template for ' +
         filled + ' employee(s) — approved overtime requests and scheduled night shifts, ' +
         esc(E.fmtShort(E.parseYmd(period.start))) + ' – ' + esc(E.fmtShort(E.parseYmd(period.end))) + '.' +
-        (flagged.length ? '<br>Overtime on a rest day or holiday, left out and noted in Remarks: ' +
+        (flagged.length ? '<br>Overtime on a rest day or holiday — paid at 1.69 / 2.60 in GROSS PAY and named in Remarks: ' +
           flagged.map(esc).join('; ') : '') + '</div>';
       save(dtr, run);
     }).catch(function (e) {
@@ -1365,7 +1398,7 @@
         });
         delete d.lateHours;   // now counted in minutes
         delete d.otNdFrom;    // the file's OT / ND hours stand from now on
-        delete d.otNdCheck;
+        delete d.otNdCheck; delete d.otNdDetail;
         d.remarks = row.remarks || null;
         d.bonusDetails = row.bonusDetails || null;
         // SSS LOAN and OTHER DEDUCTION were written out with the loan ledger

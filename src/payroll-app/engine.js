@@ -504,6 +504,7 @@
     var deMinimis = dmAuto.amount;
     var quarterlyBonus = num(dtr.quarterlyBonus);
     var commission = num(dtr.commission);
+    var nonTaxableIncome = num(dtr.nonTaxableIncome);
 
     /* 13th month pay — posted only on the payout it is scheduled for. It is
        tax-exempt up to the statutory ceiling; anything above is taxable. */
@@ -554,7 +555,7 @@
 
     /* ----------------------- GROSS PAY (col T) ------------------------- */
     var grossPay = r2(regularPay + otPay + ndPay + restDayPay + holidayPay +
-      deMinimis + quarterlyBonus + commission + transportationAllowance + thirteenthMonth +
+      deMinimis + quarterlyBonus + commission + nonTaxableIncome + transportationAllowance + thirteenthMonth +
       items.totalTaxableAllowance + items.totalNonTaxAllowance);
 
     /* ------------- statutory contributions (cols U, V, W) -------------- */
@@ -591,7 +592,7 @@
 
     // Non-taxable pay is stripped out to reach the taxable base (col Y).
     var nonTaxable = r2(transportationAllowance + deMinimis + items.totalNonTaxAllowance +
-      thirteenthExempt);
+      thirteenthExempt + nonTaxableIncome);
     var netTaxable = r2(Math.max(0, incomeAfterMandatories - nonTaxable));
     var tax = withholdingTax(netTaxable, settings);
 
@@ -667,6 +668,7 @@
         quarterlyBonus: quarterlyBonus,
         quarterlyBonusDetails: dtr.bonusDetails || '',
         commission: commission,
+        nonTaxableIncome: nonTaxableIncome,
         transportationAllowance: transportationAllowance,
         taxableAllowances: items.taxableAllowances,
         nonTaxAllowances: items.nonTaxAllowances,
@@ -757,6 +759,7 @@
     e.quarterlyBonus = v('quarterlyBonus');
     e.quarterlyBonusDetails = P.bonusDetails || '';
     e.commission = v('commission');
+    e.nonTaxableIncome = v('nonTaxIncome');
     e.transportationGiven = v('travel');
     e.travelDeduction = a('travelDeduction');
     e.transportationAllowance = r2(e.transportationGiven - e.travelDeduction);
@@ -781,7 +784,7 @@
        basic less absences, late, undertime and start/end proration, plus any
        basic or salary adjustment (back pay of basic). */
     e.regularPay = e.basicPay = P.regularPay === undefined
-      ? r2(e.grossPay - e.otPay - e.ndPay - e.deMinimis - e.quarterlyBonus - e.commission -
+      ? r2(e.grossPay - e.otPay - e.ndPay - e.deMinimis - e.quarterlyBonus - e.commission - e.nonTaxableIncome -
           e.transportationAllowance - e.holidayPay - e.thirteenthMonth - e.totalTaxableAllowance -
           e.totalNonTaxAllowance)
       : r2(v('regularPay') - e.absenceDeduction - e.lateDeduction - e.undertimeDeduction -
@@ -797,7 +800,7 @@
     slip.tax.taxableIncome = v('netTaxable');
     slip.tax.withholding = a('tax');
     e.grossTaxable = slip.tax.taxableIncome;
-    e.nonTaxable = r2(e.deMinimis + e.transportationAllowance + e.thirteenthExempt + e.companyBonus);
+    e.nonTaxable = r2(e.deMinimis + e.transportationAllowance + e.thirteenthExempt + e.companyBonus + e.nonTaxableIncome);
 
     var pt = slip.postTax;
     pt.tendoPay = a('tendo'); pt.hmo = a('hmo'); pt.otherDeduction = a('other');
@@ -815,7 +818,7 @@
        here — a figure typed over a formula, a column this layout lacks. The
        payslip prints it as one line so it lands on the net actually paid. */
     e.postedGrossAdjustment = P.regularPay === undefined ? 0 : r2(e.grossPay - (slip.rates.semiMonthly +
-      e.otPay + e.ndPay + e.deMinimis + e.quarterlyBonus + e.commission + e.transportationAllowance +
+      e.otPay + e.ndPay + e.deMinimis + e.quarterlyBonus + e.commission + e.nonTaxableIncome + e.transportationAllowance +
       e.holidayPay + e.thirteenthMonth + e.totalTaxableAllowance + e.totalNonTaxAllowance - e.absenceDeduction -
       e.lateDeduction - e.undertimeDeduction - e.prorationDeduction));
     slip.postedNetAdjustment = r2(slip.totals.netPay - (e.grossPay - c.mandatoriesApplied -
@@ -995,7 +998,7 @@
    * company bonus and quarterly bonus that share its exempt ceiling.
    */
   function yearToDate(emp, year, dtrMap, settings, uptoPayoutDate) {
-    var basic = 0, taxable = 0, withheld = 0, gross = 0, periods = 0, paid13 = 0, paid13Taxable = 0, bonus = 0, transport = 0, dm = 0, halves = 0, qb = 0;
+    var basic = 0, taxable = 0, withheld = 0, gross = 0, periods = 0, paid13 = 0, paid13Taxable = 0, bonus = 0, transport = 0, nonTaxIncome = 0, dm = 0, halves = 0, qb = 0;
     var seen = {};
     periodsOfYear(year).concat(cutoffsOfYear(year)).forEach(function (p) {
       if (seen[p.id]) return;
@@ -1022,13 +1025,14 @@
         paid13Taxable += slip.earnings.thirteenthTaxable;
         bonus += slip.earnings.companyBonus || 0;
         transport += slip.earnings.transportationAllowance || 0;
+        nonTaxIncome += slip.earnings.nonTaxableIncome || 0;
         dm += slip.earnings.deMinimis || 0;
       }
     });
     return {
       basicEarned: r2(basic), taxableIncome: r2(taxable),
       taxWithheld: r2(withheld), grossPay: r2(gross), periods: periods,
-      thirteenthPaid: r2(paid13), thirteenthTaxedPaid: r2(paid13Taxable), companyBonus: r2(bonus), transport: r2(transport), deMinimis: r2(dm),
+      thirteenthPaid: r2(paid13), thirteenthTaxedPaid: r2(paid13Taxable), companyBonus: r2(bonus), transport: r2(transport), deMinimis: r2(dm), nonTaxableIncome: r2(nonTaxIncome),
       quarterlyBonus: r2(qb),
       monthsWorked: Math.min(12, Math.round(halves / 2 * 100) / 100)
     };
@@ -1277,7 +1281,7 @@
     var i39 = r2(i52 - i45 - i48 - i50 - i51);
     var i34 = r2(ye.thirteenthExempt);
     var i35 = r2(ytd.deMinimis + ytd.transport + pto + ye.yearEndBonus);
-    var i36 = r2(mand), i37 = 0;
+    var i36 = r2(mand), i37 = r2(ytd.nonTaxableIncome || 0);   // the NON-TAXABLE INCOME column
     var i38 = r2(i34 + i35 + i36 + i37);
     var isDate = function (v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')); };
     var from = year + '-01-01', to = year + '-12-31';

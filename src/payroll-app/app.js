@@ -620,7 +620,7 @@
     if (d.posted) {
       disabled = 'posted';
       // Locked cells show what the payroll file says, not the timesheet.
-      var POSTED_KEY = { transportationAllowance: 'travel', tendoPay: 'tendo', otherDeduction: 'other' };
+      var POSTED_KEY = { transportationAllowance: 'travel', tendoPay: 'tendo', otherDeduction: 'other', nonTaxableIncome: 'nonTaxIncome' };
       raw = d.posted[POSTED_KEY[field] || field];
     }
     var val = money ? amountValue(raw) : (raw === undefined || raw === null ? '' : raw);
@@ -764,6 +764,7 @@
             : '') + '</td>' +
         cellIn('alw', dtrInput(emp, 'quarterlyBonus', false, 92, true) + bonusDetailsInput(emp)) +
         cellIn('alw', dtrInput(emp, 'commission', false, 92, true)) +
+        cellIn('alw', dtrInput(emp, 'nonTaxableIncome', false, 92, true)) +
 
         // ---- earnings ----
         '<td class="num' + (e.regularPay ? '' : ' zero') + '">' + plain(e.regularPay) +
@@ -824,7 +825,7 @@
     });
 
     $('#runFoot').innerHTML = '<tr>' +
-      '<td colspan="18">TOTAL — ' + state.runEmployees.length + ' employees</td>' +
+      '<td colspan="20">TOTAL — ' + state.runEmployees.length + ' employees</td>' +
       '<td class="num">' + plain(sum.regularPay) + '</td>' +
       '<td class="num">' + plain(sum.otPay) + '</td>' +
       '<td class="num">' + plain(sum.ndPay) + '</td>' +
@@ -951,7 +952,7 @@
       regularPay: s.rates.semiMonthly, otHours: d.otHours, otPay: e.otPay,
       ndHours: d.ndHours, ndPay: e.ndPay,
       deMinimis: E.r2(e.deMinimis + e.deMinimisDeduction), quarterlyBonus: e.quarterlyBonus,
-      bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, sssLoan: p.sssLoan, classPass: p.classPass,
+      bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, nonTaxIncome: e.nonTaxableIncome, sssLoan: p.sssLoan, classPass: p.classPass,
       travel: e.transportationGiven, absentDays: d.absentDays + d.unpaidLeaveDays,
       absenceDeduction: e.absenceDeduction, lateMinutes: d.lateMinutes,
       lateDeduction: e.lateDeduction, undertimeMinutes: d.undertimeMinutes,
@@ -1661,6 +1662,7 @@
     // Allowances and one-off pay are grouped under a heading, as in the reference.
     var adhoc = [];
     if (e.transportationAllowance) adhoc.push({ label: 'Transportation Allowance', amount: e.transportationAllowance });
+    if (e.nonTaxableIncome) adhoc.push({ label: 'Non-taxable Income', amount: e.nonTaxableIncome });
     e.taxableAllowances.forEach(function (a) { adhoc.push({ label: a.label, amount: a.amount }); });
     e.nonTaxAllowances.forEach(function (a) { adhoc.push({ label: a.label, amount: a.amount }); });
     if (p.reimbursement) adhoc.push({ label: 'Reimbursement', amount: p.reimbursement });

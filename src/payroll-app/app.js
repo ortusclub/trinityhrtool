@@ -163,24 +163,39 @@
      an imported file set are left alone. The days behind each figure are
      kept in otNdDetail and shown on hover. */
   var otNd = { done: {} };
-  var OTND_FIELDS = ['otHours', 'otRestSpecialHours', 'otRegHolidayHours', 'ndHours'];
+  var OTND_FIELDS = ['otHours', 'otRestSpecialHours', 'otRegHolidayHours', 'restDayHours', 'ndHours'];
 
-  /** Splits a person's TrinityHR overtime by the kind of day it was worked. */
+  /** Splits a person's TrinityHR overtime by the kind of day it was worked:
+   *  their own day off (TrinityHR's attendance says rest day, on leave or
+   *  no shift; Sat/Sun when there is no log) is REST DAY WORK at 1.30 for
+   *  the first 8 hours of the day, OT 1.69 beyond; a regular holiday is
+   *  OT 2.60; a special non-working day OT 1.69; any other day OT 1.25. */
   function splitOtNd(p, period) {
     var hol = {};
     E.holidaysInPeriod(period, state.holidays, state.settings).forEach(function (h) { hol[h.date] = h; });
-    var wd = state.settings.schedule.workDays;
-    var out = { otHours: 0, otRestSpecialHours: 0, otRegHolidayHours: 0, ndHours: p ? p.scheduledNd : 0,
-      detail: { otHours: [], otRestSpecialHours: [], otRegHolidayHours: [], ndHours: [] } };
+    var wd = state.settings.schedule.workDays, hoursPerDay = state.settings.schedule.hoursPerDay || 8;
+    var out = { otHours: 0, otRestSpecialHours: 0, otRegHolidayHours: 0, restDayHours: 0, ndHours: p ? p.scheduledNd : 0,
+      detail: { otHours: [], otRestSpecialHours: [], otRegHolidayHours: [], restDayHours: [], ndHours: [] } };
     if (p && p.scheduledNd) out.detail.ndHours.push(p.scheduledNd + 'h on scheduled night shifts');
-    (p ? p.ot : []).forEach(function (o) {
+    var restUsed = {};   // rest-day hours already counted per date (8 a day at 1.30)
+    (p ? p.ot : []).slice().sort(function (a, b) { return a.date < b.date ? -1 : 1; }).forEach(function (o) {
       var day = E.parseYmd(o.date), h = hol[o.date];
-      var label = DAYNAMES[day.getDay()].slice(0, 3) + ' ' + E.fmtShort(day) + ' ' + o.hours + 'h';
-      var f = h && h.type === 'regular' ? 'otRegHolidayHours'
-        : h || wd.indexOf(day.getDay()) === -1 ? 'otRestSpecialHours' : 'otHours';
-      out[f] += o.hours;
-      out.detail[f].push(label + (h ? ' — ' + h.name + (h.type === 'regular' ? '' : ' (special)')
-        : f === 'otRestSpecialHours' ? ' — rest day' : ''));
+      var off = o.restDay === true || ((o.restDay === null || o.restDay === undefined) && wd.indexOf(day.getDay()) === -1);
+      var label = DAYNAMES[day.getDay()].slice(0, 3) + ' ' + E.fmtShort(day) + ' ';
+      var put = function (f, hrs, why) {
+        if (!hrs) return;
+        out[f] += hrs;
+        out.detail[f].push(label + E.r2(hrs) + 'h — ' + why);
+      };
+      if (h && h.type === 'regular') put('otRegHolidayHours', o.hours, h.name);
+      else if (off) {
+        var why = (o.restDay === true ? 'day off in TrinityHR' : 'weekend') + (h ? ', ' + h.name : '');
+        var first = Math.min(o.hours, Math.max(0, hoursPerDay - (restUsed[o.date] || 0)));
+        restUsed[o.date] = (restUsed[o.date] || 0) + first;
+        put('restDayHours', first, why);
+        put('otRestSpecialHours', o.hours - first, why + ', past ' + hoursPerDay + ' hours');
+      } else if (h) put('otRestSpecialHours', o.hours, h.name + ' (special)');
+      else put('otHours', o.hours, 'workday');
       if (o.ndHours) {
         out.ndHours += o.ndHours;
         out.detail.ndHours.push(o.ndHours + 'h of overtime on ' + E.fmtShort(day));
@@ -663,13 +678,13 @@
     return {
       otHours: 'OT ' + x2(pr.ot) + '\u00d7 \u2014 overtime on a regular workday: hourly rate \u00d7 ' + pct(pr.ot) +
         ' (Labor Code Art. 87).',
-      otRestSpecialHours: 'OT ' + x2(pr.otRestDaySpecial) + '\u00d7 \u2014 overtime on a rest day or a special non-working day: ' +
+      otRestSpecialHours: 'OT ' + x2(pr.otRestDaySpecial) + '\u00d7 \u2014 overtime on a special non-working day, or rest-day work past 8 hours: ' +
         'hourly rate \u00d7 130% (rest day / special day) \u00d7 130% (overtime) = ' + pct(pr.otRestDaySpecial) + '.',
       otRegHolidayHours: 'OT ' + x2(pr.otRegHoliday) + '\u00d7 \u2014 overtime on a regular holiday: ' +
         'hourly rate \u00d7 200% (regular holiday) \u00d7 130% (overtime) = ' + pct(pr.otRegHoliday) + '.',
       ndHours: 'ND \u2014 work between 10 PM and 6 AM: hourly rate \u00d7 ' + pct(pr.nd) +
         ' per hour (Art. 86), on scheduled shifts and on overtime.',
-      restDayHours: 'Rest day work, first 8 hours: hourly rate \u00d7 ' + pct(pr.restDay) + '.'
+      restDayHours: 'Rest day work \u2014 approved work on the employee\'s day off (weekend, or a rest day / leave day in TrinityHR), first 8 hours of the day: hourly rate \u00d7 ' + pct(pr.restDay) + '. Hours past 8 that day go to OT 1.69.'
     }[field] || '';
   }
   function otNdNote(emp, field) {
@@ -1112,10 +1127,11 @@
         OTND_FIELDS.forEach(function (f) { if (!E.num(d[f]) && x[f]) { d[f] = x[f]; set = true; } });
         // The template has one OT column (1.25); rest-day and holiday OT is
         // paid in SALARY ADJ and named in Remarks.
-        var odd = x.detail.otRestSpecialHours.map(function (t) { return t + ' (OT 1.69)'; })
+        var odd = x.detail.restDayHours.map(function (t) { return t + ' (rest day 1.30)'; })
+          .concat(x.detail.otRestSpecialHours.map(function (t) { return t + ' (OT 1.69)'; }))
           .concat(x.detail.otRegHolidayHours.map(function (t) { return t + ' (OT 2.60)'; }));
-        if (odd.length && x.otRestSpecialHours + x.otRegHolidayHours) {
-          d.remarks = (d.remarks ? d.remarks + '; ' : '') + 'In SALARY ADJ \u2014 rest day / holiday OT: ' + odd.join(', ');
+        if (odd.length) {
+          d.remarks = (d.remarks ? d.remarks + '; ' : '') + 'In SALARY ADJ \u2014 rest day / holiday work: ' + odd.join(', ');
           flagged.push(emp.lastName + ', ' + emp.firstName + ' — ' + odd.join(', '));
         }
         if (set) { dtr[key] = d; filled++; }
@@ -1124,7 +1140,7 @@
       note.innerHTML = '<div class="notice" style="margin-bottom:12px">OT and ND hours from TrinityHR filled in the template for ' +
         filled + ' employee(s) — approved overtime requests and scheduled night shifts, ' +
         esc(E.fmtShort(E.parseYmd(period.start))) + ' – ' + esc(E.fmtShort(E.parseYmd(period.end))) + '.' +
-        (flagged.length ? '<br>Overtime on a rest day or holiday \u2014 paid at 1.69 / 2.60 in SALARY ADJ and named in Remarks: ' +
+        (flagged.length ? '<br>Work on a rest day or holiday \u2014 paid in SALARY ADJ (rest day 1.30, OT 1.69 / 2.60) and named in Remarks: ' +
           flagged.map(esc).join('; ') : '') + '</div>';
       save(dtr, run);
     }).catch(function (e) {

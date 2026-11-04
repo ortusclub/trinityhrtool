@@ -521,6 +521,23 @@
       items.nonTaxAllowances.push({ label: 'Year-end non-taxable bonus', amount: r2(num(extra.yearEndBonus)) });
       items.totalNonTaxAllowance = r2(items.totalNonTaxAllowance + num(extra.yearEndBonus));
     }
+    /* Leave monetization on its year-end payout: tax-free up to the exempt
+       days (de minimis), the rest taxable. */
+    var lm = extra.leaveMonetization;
+    if (lm && num(lm.amount)) {
+      var lmDaily = num(lm.amount) / num(lm.days);
+      var lmFreeDays = Math.min(num(lm.days), num((settings.finalPay || {}).leaveExemptDays));
+      var lmFree = r2(lmFreeDays * lmDaily), lmTaxed = r2(num(lm.amount) - lmFree);
+      if (lmFree) {
+        items.nonTaxAllowances.push({ label: 'Leave monetization \u2014 ' + r2(lmFreeDays) + ' day/s', amount: lmFree });
+        items.totalNonTaxAllowance = r2(items.totalNonTaxAllowance + lmFree);
+      }
+      if (lmTaxed) {
+        items.taxableAllowances.push({ label: 'Leave monetization \u2014 ' + r2(num(lm.days) - lmFreeDays) +
+          ' day/s over the tax-free days', amount: lmTaxed });
+        items.totalTaxableAllowance = r2(items.totalTaxableAllowance + lmTaxed);
+      }
+    }
     /* Final pay (finalPayFor): unused leave is paid as an allowance, kept out
        of this cutoff's withholding — the annual tax adjustment taxes what is
        taxable of it — and the loan balance and clearance items come off. */
@@ -1422,7 +1439,12 @@
     var ye = settings.yearEnd || {};
     var post13th = ye.thirteenthMonthPeriodId === period.id;
     var postRefund = ye.taxRefundPeriodId === period.id;
-    var year = parseYmd(period.payoutDate).getFullYear();
+    var postLeave = ye.leaveMonetizePeriodId === period.id;
+    /* The year being settled is the year the cutoff was worked: Dec 16–31
+       is paid Jan 10 but closes the year it belongs to, so its refund
+       settles that year's tax (all of that year's payouts) and its leave
+       monetization uses that year's credits. */
+    var year = parseYmd(period.start).getFullYear();
 
     var slips = employees.map(function (emp) {
       var key = period.id + '|' + emp.id;
@@ -1433,13 +1455,15 @@
         periodById(emp.finalPay.periodId).payoutDate < period.payoutDate;
       if (fp) {
         extra = { thirteenthMonth: fp.thirteenth, thirteenthMonthTaxable: 0, taxRefund: fp.taxAdjustment, finalPay: fp };
-      } else if ((post13th || postRefund) && !settled) {
+      } else if ((post13th || postRefund || postLeave) && !settled) {
         var calc = yearEndFor(emp, year, dtrMap, settings);
         extra = {
           thirteenthMonth: post13th ? calc.thirteenthBalance : 0,
           thirteenthMonthTaxable: post13th ? calc.thirteenthBalanceTaxable : 0,
           yearEndBonus: post13th ? calc.yearEndBonus : 0,
-          taxRefund: postRefund ? calc.adjustment : 0
+          taxRefund: postRefund ? calc.adjustment : 0,
+          leaveMonetization: postLeave && calc.leave.monetizableDays > 0
+            ? { days: calc.leave.monetizableDays, amount: calc.leave.monetizableAmount } : null
         };
       }
       return computePayslip(withCarriedRate(emp, period, dtrMap), period, (dtrMap || {})[key], settings, extra);

@@ -94,7 +94,10 @@
       yearEndBonus: 3000,
       // Payout these are posted on. '' = do not post, just report.
       thirteenthMonthPeriodId: '',
-      taxRefundPeriodId: ''
+      taxRefundPeriodId: '',
+      // Payout the year's leave monetization is posted on (leave ledger:
+      // days to monetize × daily rate; tax-free up to finalPay.leaveExemptDays).
+      leaveMonetizePeriodId: ''
     },
 
     // BIR annual income tax table (TRAIN), used for the year-end annualisation.

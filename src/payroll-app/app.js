@@ -414,6 +414,8 @@
        only the people in it. Otherwise everyone on staff with a rate. */
     state.runEmployees = runEmployeesFor(state.period);
     syncOtNd(state.period);
+    // Leave monetization reads the TrinityHR balances.
+    if (state.settings.yearEnd.leaveMonetizePeriodId === state.period.id) { loadLiveLeave(); attachLiveLeave(); }
     state.run = E.computeRun(state.runEmployees, state.period, state.dtr, state.settings);
     renderPeriodMeta();
     renderRosterNotice();
@@ -3254,10 +3256,10 @@
       liveLeave.byEmail = {};
       (data.balances || []).forEach(function (b) { liveLeave.byEmail[b.email] = b; });
       liveLeave.loading = false;
-      renderYearEnd(); renderFinalPay(); renderEmployees();
+      renderYearEnd(); renderFinalPay(); renderEmployees(); renderRun();
     }).catch(function (e) {
       liveLeave.loading = false; liveLeave.error = e.message; liveLeave.byEmail = {};
-      renderYearEnd(); renderFinalPay(); renderEmployees();
+      renderYearEnd(); renderFinalPay(); renderEmployees(); renderRun();
     });
   }
 
@@ -3270,14 +3272,19 @@
       : 'Annual Leave from TrinityHR: credits this cycle and approved leave taken (pending is not counted).';
     $('#yearEndYear').textContent = '\u2014 ' + state.year;
 
+    // The year's cutoffs, and Dec 16–31 (paid the next January), which closes it.
+    var yePeriods = state.periods.concat(E.buildPeriods(state.year + 1).slice(0, 1));
     var opts = '<option value="">Do not post \u2014 report only</option>' +
-      state.periods.map(function (p) {
-        return '<option value="' + esc(p.id) + '">' + esc(p.label) + '</option>';
+      yePeriods.map(function (p) {
+        return '<option value="' + esc(p.id) + '">' + esc(window.PayrollTemplate.cutoffTitle(p) +
+          ' (paid ' + E.fmtShort(E.parseYmd(p.payoutDate)) + ')') + '</option>';
       }).join('');
     $('#sel13th').innerHTML = opts;
     $('#sel13th').value = state.settings.yearEnd.thirteenthMonthPeriodId || '';
     $('#selRefund').innerHTML = opts;
     $('#selRefund').value = state.settings.yearEnd.taxRefundPeriodId || '';
+    $('#selMonetize').innerHTML = opts;
+    $('#selMonetize').value = state.settings.yearEnd.leaveMonetizePeriodId || '';
 
     var calcs = state.employees.map(function (emp) {
       return { emp: emp, ye: E.yearEndFor(emp, state.year, state.dtr, state.settings) };

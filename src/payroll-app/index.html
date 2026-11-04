@@ -389,6 +389,8 @@
           <select data-setting="yearEnd.thirteenthMonthPeriodId" id="sel13th"></select></label>
         <label>Tax refund / adjustment posted on
           <select data-setting="yearEnd.taxRefundPeriodId" id="selRefund"></select></label>
+        <label>Leave monetization posted on
+          <select data-setting="yearEnd.leaveMonetizePeriodId" id="selMonetize"></select></label>
         <label>13th month divisor
           <input type="number" step="1" data-setting="yearEnd.thirteenthMonthDivisor"></label>
         <label>13th month tax-exempt ceiling
@@ -822,7 +824,8 @@
           <li><strong>Max monetizable</strong>: hired before the cutoff year (Settings &amp; Rules → Leave, now 2023) — up to 10 days, marked <em>tenured</em>; hired that year or later — up to 5 days.</li>
           <li><strong>Days to monetize</strong> = the smaller of Remaining and the cap. Overdrawn or nothing left → 0.</li>
           <li><strong>Cash value</strong> = days to monetize × daily rate (monthly × 12 ÷ 261). Example: 10 days × 2,689.66 = 26,896.55.</li>
-          <li>The ledger is the record of what may be monetized; it does not add the amount to a payslip by itself.</li>
+          <li>The amount is paid on the cutoff chosen in <em>Leave monetization posted on</em> (13th Month &amp; Year-End): Dec 16–31, paid Jan 10. Tax-free up to the days in Settings &amp; Rules (10); days above that are taxable.</li>
+          <li>Year-end cutoffs: <strong>13th month</strong> on Nov 16–30 (paid Dec 10); <strong>leave monetization and the tax refund</strong> on Dec 16–31 (paid Jan 10). The refund settles the year the cutoff was worked — the tax withheld on every payout of that year against the tax due on the year.</li>
         </ol>
         <h3>Resigned — unused leave in final pay</h3>
         <ol>

@@ -812,6 +812,7 @@
         cellIn('alw', dtrInput(emp, 'transportationAllowance', false, 92, true)) +
         cellIn('alw', dtrInput(emp, 'travelDeduction', false, 92, true)) +
         cellIn('alw', dtrInput(emp, 'exMilestones', false, 92, true)) +
+        cellIn('alw', dtrInput(emp, 'ptoPay', false, 92, true)) +
         // Computed, never typed: the standard amount, prorated by working days
         // when the start date lands inside the cutoff.
         '<td class="num' + (e.deMinimis ? '' : ' zero') + '">' + plain(e.deMinimis) +
@@ -882,7 +883,7 @@
     });
 
     $('#runFoot').innerHTML = '<tr>' +
-      '<td colspan="20">TOTAL — ' + state.runEmployees.length + ' employees</td>' +
+      '<td colspan="21">TOTAL — ' + state.runEmployees.length + ' employees</td>' +
       '<td class="num">' + plain(sum.regularPay) + '</td>' +
       '<td class="num">' + plain(sum.otPay) + '</td>' +
       '<td class="num">' + plain(sum.ndPay) + '</td>' +
@@ -1009,7 +1010,8 @@
       regularPay: s.rates.semiMonthly, otHours: d.otHours, otPay: e.otPay,
       ndHours: d.ndHours, ndPay: e.ndPay,
       deMinimis: E.r2(e.deMinimis + e.deMinimisDeduction), quarterlyBonus: e.quarterlyBonus,
-      bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, nonTaxIncome: e.nonTaxableIncome, sssLoan: p.sssLoan, classPass: p.classPass,
+      bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, nonTaxIncome: e.nonTaxableIncome,
+      thirteenth: e.thirteenthMonth, exMilestones: e.companyBonus, ptoPay: e.ptoPay || 0, sssLoan: p.sssLoan, classPass: p.classPass,
       travel: e.transportationGiven, absentDays: d.absentDays + d.unpaidLeaveDays,
       absenceDeduction: e.absenceDeduction, lateMinutes: d.lateMinutes,
       lateDeduction: e.lateDeduction, undertimeMinutes: d.undertimeMinutes,

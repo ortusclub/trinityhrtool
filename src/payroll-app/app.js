@@ -1653,7 +1653,8 @@
         if (t.trim()) add(earn, t.trim(), null, 'sub');
       });
     }
-    if (e.commission) add(earn, 'Commission', e.commission);
+    // A negative commission is a deduction: shown as one, not as negative pay.
+    if (e.commission > 0) add(earn, 'Commission', e.commission);
     if (e.thirteenthMonth) add(earn, slip.finalPay ? '13th Month Pay (pro rata, final pay)' : '13th Month Pay', e.thirteenthMonth);
     if (e.deMinimis) add(earn, 'De Minimis', e.deMinimis);
     if (slip.posted && e.holidayPay) add(earn, 'Holiday / Rest Day Pay', e.holidayPay);
@@ -1681,6 +1682,7 @@
     if (e.lateDeduction) add(ded, 'Late Deduction — ' + slip.dtr.lateMinutes + ' min', e.lateDeduction);
     if (e.undertimeDeduction) add(ded, 'Undertime Deduction — ' + slip.dtr.undertimeMinutes + ' min', e.undertimeDeduction);
     if (e.prorationDeduction && !allOff) add(ded, 'Basic Adjustment (start / last day)', e.prorationDeduction);
+    if (e.commission < 0) add(ded, 'Commission Adjustment', -e.commission);
     add(ded, 'SSS EE Contribution', sssApplied);
     add(ded, 'PhilHealth EE Contribution', phic);
     add(ded, 'HDMF EE Contribution', hdmf);

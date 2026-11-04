@@ -48,7 +48,9 @@
     // What the bonus is for, printed under it on the payslip.
     { head: 'QUARTERLY BONUS DETAILS', key: 'bonusDetails', input: 'bonusDetails', width: 28 },
     // Taxable; BIR 2316 item 45.
-    { head: 'COMMISSION', key: 'commission', input: 'commission', width: 12, alias: ['COMMISSIONS'] },
+    // Not written to the template or the summary (sheet: false), but still
+    // read from a file that has the column.
+    { head: 'COMMISSION', key: 'commission', input: 'commission', width: 12, alias: ['COMMISSIONS'], sheet: false },
     // Any other non-taxable pay: in gross, kept out of the taxable base;
     // BIR 2316 item 37.
     { head: 'NON-TAXABLE INCOME', key: 'nonTaxIncome', input: 'nonTaxableIncome', width: 12,
@@ -136,9 +138,11 @@
      format hints, figures as values (summary(slip, i) gives them by column
      key: what was computed or imported, not re-worked by formulas), and a
      TOTAL row under the data. */
+  var SHEET_COLUMNS = PAYROLL_COLUMNS.filter(function (c) { return c.sheet !== false; });
   var NO_TOTAL = { no: 1, id: 1, name: 1, position: 1, department: 1, newRate: 1, newRateDate: 1,
     payPeriod: 1, bonusDetails: 1, remarks: 1 };
   function payrollSheet(run, period, settings, summary) {
+    var PAYROLL_COLUMNS = SHEET_COLUMNS;
     var rows = [];
     rows.push([{ v: 'Company Name: ' + settings.company.name, t: 's', s: S.BOLD }]);
     // Row 2: the title, then above each column to fill in, what goes there.
@@ -185,7 +189,7 @@
       // Rest-day work and rest-day / holiday overtime (OT 1.69, OT 2.60,
       // Rest 1.30) go in SALARY ADJ beside any back pay; Remarks names them.
       var restDayWork = E2(e.otPayRestSpecial + e.otPayRegHoliday + e.restDayPay);
-      var extraGross = E2(e.holidayPay +
+      var extraGross = E2((at.commission ? 0 : e.commission || 0) + e.holidayPay +
         e.thirteenthMonth + e.totalTaxableAllowance - backPay + e.totalNonTaxAllowance);
       var extraNonTax = E2(e.totalNonTaxAllowance + e.thirteenthExempt);
       var extraNet = E2(p.reimbursement + p.taxRefund);
@@ -228,7 +232,7 @@
         dmDeduction: n(e.deMinimisDeduction),
         travelDeduction: inp(e.travelDeduction),
         gross: f(C('regularPay') + '+' + C('otPay') + '+' + C('ndPay') + '+' + C('deMinimis') + '+' +
-          C('quarterlyBonus') + '+' + C('commission') + '+' + C('nonTaxIncome') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
+          C('quarterlyBonus') + (at.commission ? '+' + C('commission') : '') + '+' + C('nonTaxIncome') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
           C('lateDeduction') + '-' + C('undertimeDeduction') + '-' + C('prorationDeduction') + '-' +
           C('dmDeduction') + '-' + C('travelDeduction') + (extraGross ? '+' + extraGross : '')),
         sss: n(c.sss), phic: n(c.philhealth), hdmf: n(c.pagibig),

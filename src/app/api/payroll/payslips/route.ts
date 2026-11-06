@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { displayName } from "@/lib/utils";
 import {
+  allSlipsFor,
   BATCH_ID,
   deleteBatch,
   getBatch,
   listBatches,
+  peopleWithPayslips,
   saveBatch,
 } from "@/lib/payslips-store";
 import type { PayslipLine, StoredPayslip } from "@/types/database";
@@ -13,6 +15,7 @@ import { failed, payrollAdmin } from "../auth";
 
 // Admin → Payroll → Payslip.
 // GET ?batch=ID  what a batch holds;  GET  every batch.
+// GET ?people=1  everyone with a payslip;  GET ?employee=UUID  all of theirs.
 // PUT            replace a batch (a payroll cutoff, or an uploaded file).
 // DELETE ?batch  remove a batch and its payslips.
 // Everything runs as the signed-in admin, so row-level security applies.
@@ -22,9 +25,18 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export async function GET(request: Request) {
   const admin = await payrollAdmin();
   if (admin instanceof NextResponse) return admin;
-  const id = new URL(request.url).searchParams.get("batch");
+  const params = new URL(request.url).searchParams;
+  const id = params.get("batch");
   const db = await createClient();
   try {
+    if (params.get("people")) {
+      const people = (await peopleWithPayslips(db))
+        .map((u) => ({ id: u.id as string, name: displayName(u), email: (u.email as string | null) ?? "" }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return NextResponse.json({ people });
+    }
+    const employee = params.get("employee");
+    if (employee !== null) return NextResponse.json({ payslips: await allSlipsFor(db, employee) });
     if (id === null) return NextResponse.json({ batches: await listBatches(db) });
     if (!BATCH_ID.test(id)) return NextResponse.json({ error: "Unknown batch." }, { status: 400 });
     const batch = await getBatch(db, id);

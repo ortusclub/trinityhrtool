@@ -561,6 +561,23 @@
 
     <div class="card">
       <div class="card-head">
+        <h2>Payslips by employee</h2>
+        <p class="hint" style="display:block">
+          Search for someone, tick the months to include (by payout date), then download: their payslips open
+          one per page, ready to save as a single PDF. Drafts are included and marked.
+        </p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 8px">
+        <label>Employee
+          <input type="search" id="pxSearch" list="pxPeople" placeholder="Type a name or email" autocomplete="off">
+          <datalist id="pxPeople"></datalist>
+        </label>
+      </div>
+      <div id="pxBody" style="padding:0 20px 18px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
         <h2>Preview as an employee</h2>
         <p class="hint" style="display:block">Exactly what they see, with the settings below.</p>
       </div>

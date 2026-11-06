@@ -231,3 +231,59 @@ export async function savePayslipSettings(db: SupabaseClient, settings: PayslipS
     .upsert({ id: 1, settings, updated_at: new Date().toISOString(), updated_by: by }, { onConflict: "id" });
   if (error) throw error;
 }
+
+export interface PersonSlip {
+  batch_id: string;
+  kind: BatchKind;
+  label: string;
+  payout_date: string;
+  net_pay: number;
+  currency: string;
+  published: boolean;
+}
+
+/** Everyone who has at least one payslip, drafts included (admins only). */
+export async function peopleWithPayslips(db: SupabaseClient) {
+  const ids = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await db
+      .from("payslips")
+      .select("employee_id")
+      .order("id")
+      .range(from, from + 999);
+    if (error) throw error;
+    for (const r of page ?? []) ids.add(r.employee_id as string);
+    if (!page || page.length < 1000) break;
+  }
+  if (!ids.size) return [];
+  const { data, error } = await db
+    .from("users")
+    .select("id, email, full_name, preferred_name, first_name, last_name")
+    .in("id", [...ids]);
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** Every payslip one person has, drafts included, newest payout first. */
+export async function allSlipsFor(db: SupabaseClient, userId: string): Promise<PersonSlip[]> {
+  if (!UUID.test(userId)) return [];
+  const [{ data, error }, { data: releases, error: relError }] = await Promise.all([
+    db.from("payslips").select(ROW).eq("employee_id", userId).order("payout_date", { ascending: false }),
+    db.from("payslip_releases").select("period_id").not("published_at", "is", null),
+  ]);
+  if (error) throw error;
+  if (relError) throw relError;
+  const released = new Set((releases ?? []).map((r) => r.period_id as string));
+  return ((data ?? []) as Row[]).map((r) => {
+    const s = toSlip(r);
+    return {
+      batch_id: s.batch_id,
+      kind: batchKind(s.batch_id),
+      label: s.period_label,
+      payout_date: s.payout_date,
+      net_pay: s.net_pay,
+      currency: s.currency,
+      published: released.has(s.batch_id),
+    };
+  });
+}

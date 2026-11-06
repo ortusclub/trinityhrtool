@@ -3467,6 +3467,7 @@
     $('#psPeriod').value = state.period.id;
     psLoadStatus();
     psLoadBatches();
+    pxLoadPeople();
     if (!ps.settings) {
       psApi('payslip-settings').then(function (d) { ps.settings = d.settings; psRenderSettings(); },
         function (err) { $('#psSettingsMsg').textContent = 'Could not load: ' + err.message; });
@@ -3544,6 +3545,122 @@
     psApi('payslips/release', 'POST', { batch_id: id, published: publish })
       .then(function () { loadBatchStatus(true); return Promise.all([psLoadStatus(), psLoadBatches()]); },
         function (err) { alert('Could not ' + (publish ? 'publish' : 'unpublish') + '.\n\n' + err.message); });
+  }
+
+  /* ---- payslips by employee: pick months, save as one PDF ---- */
+  var px = { people: [], person: null, slips: [] };
+  var PX_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function pxOption(p) { return p.name + (p.email ? ' <' + p.email + '>' : ''); }
+
+  function pxLoadPeople() {
+    return psApi('payslips?people=1').then(function (d) {
+      px.people = d.people;
+      $('#pxPeople').innerHTML = d.people.map(function (p) { return '<option value="' + esc(pxOption(p)) + '"></option>'; }).join('');
+      if (!px.person) pxRender();
+    }, function (err) {
+      $('#pxBody').innerHTML = '<p class="muted">Could not reach TrinityHR: ' + esc(err.message) + '</p>';
+    });
+  }
+
+  // The datalist choice, or the one person whose name or email holds the text.
+  function pxFind(text) {
+    var q = String(text || '').trim().toLowerCase();
+    if (!q) return null;
+    var exact = px.people.filter(function (p) { return pxOption(p).toLowerCase() === q; });
+    if (exact.length) return exact[0];
+    var hits = px.people.filter(function (p) { return (p.name + ' ' + p.email).toLowerCase().indexOf(q) >= 0; });
+    return hits.length === 1 ? hits[0] : null;
+  }
+
+  function pxPick() {
+    var p = pxFind($('#pxSearch').value);
+    if (!p) {
+      if (px.person) { px.person = null; px.slips = []; }
+      pxRender();
+      return;
+    }
+    if (px.person && px.person.id === p.id) return;
+    px.person = p; px.slips = [];
+    $('#pxBody').innerHTML = '<p class="muted">Loading ' + esc(p.name) + '’s payslips…</p>';
+    psApi('payslips?employee=' + encodeURIComponent(p.id)).then(function (d) {
+      if (px.person !== p) return;
+      px.slips = d.payslips;
+      pxRender();
+    }, function (err) {
+      $('#pxBody').innerHTML = '<p class="muted">Could not load payslips: ' + esc(err.message) + '</p>';
+    });
+  }
+
+  function pxRender() {
+    var body = $('#pxBody');
+    if (!px.person) {
+      var q = $('#pxSearch').value.trim();
+      body.innerHTML = '<p class="muted">' + (q
+        ? 'No single match for “' + esc(q) + '” — keep typing or pick a name from the list.'
+        : px.people.length + ' people have payslips. Start typing a name.') + '</p>';
+      return;
+    }
+    if (!px.slips.length) { body.innerHTML = '<p class="muted">No payslips for ' + esc(px.person.name) + '.</p>'; return; }
+    var months = {}, order = [];
+    px.slips.forEach(function (s) {
+      var m = s.payout_date.slice(0, 7);
+      if (!months[m]) { months[m] = []; order.push(m); }
+      months[m].push(s);
+    });
+    order.sort().reverse();
+    var years = [];
+    order.forEach(function (m) { if (years.indexOf(m.slice(0, 4)) < 0) years.push(m.slice(0, 4)); });
+    body.innerHTML =
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">' +
+        '<button class="btn ghost tiny" type="button" data-pxall="1">Tick all</button>' +
+        '<button class="btn ghost tiny" type="button" data-pxall="0">Untick all</button>' +
+        years.map(function (y) { return '<button class="btn ghost tiny" type="button" data-pxyear="' + y + '">Only ' + y + '</button>'; }).join('') +
+      '</div>' +
+      '<table class="grid compact"><thead><tr><th style="width:1%"></th><th>Month paid</th><th>Payslips</th></tr></thead><tbody>' +
+      order.map(function (m) {
+        var slips = months[m].slice().sort(function (a, b) { return a.payout_date.localeCompare(b.payout_date); });
+        return '<tr><td><input type="checkbox" data-pxmonth="' + m + '" id="px-' + m + '" checked></td>' +
+          '<td style="white-space:nowrap"><label for="px-' + m + '">' + PX_MONTHS[+m.slice(5, 7) - 1] + ' ' + m.slice(0, 4) + '</label></td><td>' +
+          slips.map(function (s) {
+            return esc(KIND_NAME[s.kind] || s.kind) + ' · ' + esc(s.label) + ' · paid ' + esc(psDay(s.payout_date)) +
+              ' · ' + esc(psMoney(s.net_pay, s.currency)) + (s.published ? '' : ' <span class="pill spc">Draft</span>');
+          }).join('<br>') + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<div style="display:flex;gap:10px;align-items:center;margin-top:12px">' +
+        '<button class="btn" type="button" id="pxDownload">Download</button><span class="muted" id="pxCount"></span>' +
+      '</div>';
+    pxCount();
+  }
+
+  function pxChosen() {
+    var on = {};
+    Array.prototype.forEach.call(document.querySelectorAll('#pxBody input[data-pxmonth]'), function (c) { if (c.checked) on[c.dataset.pxmonth] = true; });
+    return px.slips.filter(function (s) { return on[s.payout_date.slice(0, 7)]; });
+  }
+
+  function pxCount() {
+    var n = pxChosen().length, btn = $('#pxDownload');
+    if (!btn) return;
+    btn.disabled = !n;
+    btn.textContent = n ? 'Download ' + n + ' payslip' + (n === 1 ? '' : 's') + ' (PDF)' : 'Download';
+    $('#pxCount').textContent = n ? '' : 'Tick at least one month.';
+  }
+
+  function pxClick(ev) {
+    var t = ev.target.closest('button');
+    if (!t) return;
+    var boxes = document.querySelectorAll('#pxBody input[data-pxmonth]');
+    if (t.dataset.pxall !== undefined) {
+      Array.prototype.forEach.call(boxes, function (c) { c.checked = t.dataset.pxall === '1'; });
+      pxCount();
+    } else if (t.dataset.pxyear !== undefined) {
+      Array.prototype.forEach.call(boxes, function (c) { c.checked = c.dataset.pxmonth.slice(0, 4) === t.dataset.pxyear; });
+      pxCount();
+    } else if (t.id === 'pxDownload') {
+      var ids = pxChosen().map(function (s) { return s.batch_id; });
+      if (!ids.length) return;
+      window.open('/payslip-export/' + encodeURIComponent(px.person.id) + '?batches=' + encodeURIComponent(ids.join(',')), '_blank');
+    }
   }
 
   /* ---- all batches + preview ---- */
@@ -4221,6 +4338,9 @@
     $('#psPublish').addEventListener('click', function () { trinityRelease(true); });
     $('#psUnpublish').addEventListener('click', function () { trinityRelease(false); });
     $('#psBatches').addEventListener('click', psBatchClick);
+    $('#pxSearch').addEventListener('input', pxPick);
+    $('#pxBody').addEventListener('click', pxClick);
+    $('#pxBody').addEventListener('change', pxCount);
     $('#psPreviewBatch').addEventListener('change', psLoadPreviewPeople);
     $('#psEmployee').addEventListener('change', psPreview);
     wireFinalPay();

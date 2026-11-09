@@ -768,14 +768,14 @@
     slip.dtr.otHours = v('otHours'); slip.dtr.totalOtHours = v('otHours');
     slip.dtr.otRestSpecialHours = 0; slip.dtr.otRegHolidayHours = 0;
     slip.dtr.ndHours = v('ndHours'); slip.dtr.absentDays = v('absentDays');
-    slip.dtr.unpaidLeaveDays = 0; slip.dtr.restDayHours = 0;
+    slip.dtr.unpaidLeaveDays = 0; slip.dtr.restDayHours = v('restDayHours');
     slip.dtr.regHolidayDays = 0; slip.dtr.specialHolidayDays = 0;
     slip.dtr.lateMinutes = v('lateMinutes'); slip.dtr.lateHours = r2(v('lateMinutes') / 60);
     slip.dtr.undertimeMinutes = v('undertimeMinutes');
 
     e.otPayRegular = v('otPay'); e.otPayRestSpecial = 0; e.otPayRegHoliday = 0;
     e.otPay = v('otPay'); e.ndPay = v('ndPay');
-    e.restDayPay = 0; e.regHolidayPay = 0; e.specialHolidayPay = 0;
+    e.restDayPay = v('restDayPay'); e.regHolidayPay = 0; e.specialHolidayPay = 0;
     e.holidayPay = v('holidayPay');
     e.deMinimisDeduction = a('dmDeduction');
     e.deMinimis = r2(v('deMinimis') - e.deMinimisDeduction);
@@ -811,7 +811,7 @@
        basic or salary adjustment (back pay of basic). */
     e.regularPay = e.basicPay = P.regularPay === undefined
       ? r2(e.grossPay - e.otPay - e.ndPay - e.deMinimis - e.quarterlyBonus - e.commission - e.nonTaxableIncome -
-          e.transportationAllowance - e.holidayPay - e.thirteenthMonth - e.totalTaxableAllowance -
+          e.transportationAllowance - e.holidayPay - e.restDayPay - e.thirteenthMonth - e.totalTaxableAllowance -
           e.totalNonTaxAllowance)
       : r2(v('regularPay') - e.absenceDeduction - e.lateDeduction - e.undertimeDeduction -
           e.prorationDeduction + v('basicAdj') + v('salaryAdj'));
@@ -845,7 +845,7 @@
        payslip prints it as one line so it lands on the net actually paid. */
     e.postedGrossAdjustment = P.regularPay === undefined ? 0 : r2(e.grossPay - (slip.rates.semiMonthly +
       e.otPay + e.ndPay + e.deMinimis + e.quarterlyBonus + e.commission + e.nonTaxableIncome + e.transportationAllowance +
-      e.holidayPay + e.thirteenthMonth + e.totalTaxableAllowance + e.totalNonTaxAllowance - e.absenceDeduction -
+      e.holidayPay + e.restDayPay + e.thirteenthMonth + e.totalTaxableAllowance + e.totalNonTaxAllowance - e.absenceDeduction -
       e.lateDeduction - e.undertimeDeduction - e.prorationDeduction));
     slip.postedNetAdjustment = r2(slip.totals.netPay - (e.grossPay - c.mandatoriesApplied -
       slip.tax.withholding - pt.total + pt.reimbursement + pt.taxRefund));

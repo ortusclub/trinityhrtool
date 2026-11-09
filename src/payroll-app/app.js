@@ -816,13 +816,11 @@
         cellIn('alw', dtrInput(emp, 'exMilestones', false, 92, true)) +
         cellIn('alw', dtrInput(emp, 'ptoPay', false, 92, true)) +
         // Computed, never typed: the standard amount less a day's de minimis
-        // per day absent or off staff.
+        // per day before the start date or after the last day.
         '<td class="num' + (e.deMinimis ? '' : ' zero') + '">' + plain(e.deMinimis) +
           (e.deMinimisProrated && e.deMinimisAuto
             ? '<div class="auto-note">' + plain(e.deMinimisAuto.full) + ' \u2212 ' + e.deMinimisAuto.daysOff +
-              ' day' + (e.deMinimisAuto.daysOff === 1 ? '' : 's') + ' \u00d7 ' + plain(e.deMinimisAuto.daily) +
-              (e.deMinimisAuto.offStaffDays && e.deMinimisAuto.absentDays ? ' (' + e.deMinimisAuto.absentDays + ' absent, ' +
-                e.deMinimisAuto.offStaffDays + ' off staff)' : e.deMinimisAuto.offStaffDays ? ' off staff' : ' absent') + '</div>'
+              ' day' + (e.deMinimisAuto.daysOff === 1 ? '' : 's') + ' \u00d7 ' + plain(e.deMinimisAuto.daily) + ' off staff</div>'
             : '') + '</td>' +
         cellIn('alw', dtrInput(emp, 'quarterlyBonus', false, 92, true) + bonusDetailsInput(emp)) +
         cellIn('alw', dtrInput(emp, 'commission', false, 92, true)) +

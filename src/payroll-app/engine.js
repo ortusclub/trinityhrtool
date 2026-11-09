@@ -134,22 +134,22 @@
 
   /**
    * De minimis for one cutoff: the standard amount, less a day's de minimis
-   * for every working day not worked — absences and unpaid leave, and the
-   * days before the start date or after the last day. A day's de minimis
-   * follows the daily-rate formula: standard x 2 (a month) x 12 / 261, so
-   * ₱1,500 is ₱137.93 a day. Never below 0. This is how the company's
-   * payroll files work it out (1 day off → 1,362.07; 5 → 810.35).
+   * for every working day of the cutoff before the start date or after the
+   * last day (from the 201 File dates — nothing to type). Absences do not
+   * touch it (Japheth, 9 Nov 2026). A day's de minimis follows the
+   * daily-rate formula: standard x 2 (a month) x 12 / 261, so ₱1,500 is
+   * ₱137.93 a day. Never below 0. As the company's payroll files have it
+   * for new hires and leavers (1 day off → 1,362.07; 5 → 810.35).
    */
-  function deMinimisFor(emp, period, settings, absentDays) {
+  function deMinimisFor(emp, period, settings) {
     var full = num(settings.defaultDeMinimis);
     var st = staffDays(emp, period, settings);
-    var absent = Math.max(0, num(absentDays));
     var daily = r2(full * 2 * 12 / settings.dayFactor);   // rounded first, as the files do
-    var daysOff = st.offDays + absent;
+    var daysOff = st.offDays;
     var amount = daysOff ? r2(Math.max(0, full - daily * daysOff)) : r2(full);
     return {
       amount: amount, full: r2(full), prorated: daysOff > 0,
-      daily: daily, daysOff: daysOff, offStaffDays: st.offDays, absentDays: absent,
+      daily: daily, daysOff: daysOff, offStaffDays: st.offDays,
       workDaysOnStaff: st.onStaff, workDaysTotal: st.total
     };
   }
@@ -495,14 +495,15 @@
     /* ---------------- allowances (cols O, P) ---------------------------
        Transportation allowance is entered directly as an amount. De minimis
        is not entered at all: it is always the standard amount, less a day's
-       de minimis per day absent or off staff (deMinimisFor). Any value
+       de minimis per day before the start date or after the last day
+       (deMinimisFor). Absences do not touch it. Any value
        left in a stored timesheet by an earlier version is ignored on
        purpose — there is no longer a way to set one, so honouring an old one
        would freeze an amount nobody can see or clear. Both are non-taxable. */
     var transportationGiven = num(dtr.transportationAllowance);
     var travelDeduction = Math.min(transportationGiven, num(dtr.travelDeduction));
     var transportationAllowance = r2(transportationGiven - travelDeduction);
-    var dmAuto = deMinimisFor(emp, period, settings, absentDays);
+    var dmAuto = deMinimisFor(emp, period, settings);
     var deMinimis = dmAuto.amount;
     var quarterlyBonus = num(dtr.quarterlyBonus);
     var commission = num(dtr.commission);

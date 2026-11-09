@@ -257,8 +257,9 @@
         undertimeMinutes: inp(d.undertimeMinutes),
         undertimeDeduction: f('ROUND(' + hourly + '*' + C('undertimeMinutes') + '/60,2)'),
         prorationDeduction: n(e.prorationDeduction),
-        // A day's de minimis (standard x 24 / 261) per day absent or off staff.
-        dmDeduction: f('ROUND(MIN(' + C('deMinimis') + ',(' + e.deMinimisAuto.offStaffDays + '+' + C('absentDays') + ')*ROUND(' +
+        // A day's de minimis (standard x 24 / 261) per working day before
+        // the start date or after the last day; absences do not touch it.
+        dmDeduction: f('ROUND(MIN(' + C('deMinimis') + ',' + e.deMinimisAuto.offStaffDays + '*ROUND(' +
           C('deMinimis') + '*24/' + factor + ',2)),2)'),
         travelDeduction: inp(e.travelDeduction),
         gross: f(C('regularPay') + '+' + C('otPay') + '+' + C('ndPay') + '+' + C('restDayPay') + '+' + C('deMinimis') + '+' +
@@ -412,12 +413,12 @@
     pair('Travel allowance deductions', 'Typed as an amount; comes off the travel allowance (non-taxable)');
     pair('De minimis', 'Automatic — ' + Number(settings.defaultDeMinimis).toFixed(2) +
       ' PHP per cutoff, non-taxable, less a day\'s de minimis (standard x 2 x 12 / ' + settings.dayFactor +
-      ') for every day absent, on unpaid leave, or off staff.');
+      ') for every working day before the start date or after the last day. Absences do not change it.');
     rows.push([]);
     section('Starting or leaving inside a cutoff');
     pair('ADHOC PAYMENT - BASIC ADJ DEDUCTIONS', 'Automatic from the 201 File start date and last ' +
       'day of work: daily rate x working days in the cutoff before the start date or after the last day.');
-    pair('DE MINIMIS (DM) DEDUCTIONS', 'Automatic: (days off staff + DAYS ABSENT) x the day\'s de minimis ' +
+    pair('DE MINIMIS (DM) DEDUCTIONS', 'Automatic from the start date and last day: working days off staff x the day\'s de minimis ' +
       '(DE MINIMIS x 24 / ' + settings.dayFactor + '), never more than the de minimis.');
     rows.push([]);
     section('Late and undertime');

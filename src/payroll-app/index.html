@@ -80,8 +80,8 @@
           holiday. <strong>ND hrs</strong> are hours worked 10:00PM–6:00AM, paid at hourly × 10%
           (auto-suggested as OT hours beyond the first 3, editable). <strong>Transp. allow.</strong> is
           entered directly as an amount. <strong>De minimis</strong> is not entered at all — it is
-          computed every cutoff as the standard ₱1,500, prorated by working days when someone's
-          start date falls inside the cutoff. Both are non-taxable. Managers are exempt from OT,
+          computed every cutoff as the standard ₱1,500, less ₱137.93 (₱1,500 × 2 × 12 ÷ 261) for every
+          working day before the start date or after the last day. Absences don't change it. Both are non-taxable. Managers are exempt from OT,
           night differential and holiday premium.
         </p>
       </div>
@@ -117,7 +117,7 @@
               <th class="num" title="Travel allowance deductions — taken off the travel allowance">Travel ded.</th>
               <th class="num" title="Ex milestones — anniversary bonus. Non-taxable, outside the ₱90,000 ceiling.">Ex milestones</th>
               <th class="num" title="PTO — unused leave converted to cash (non-taxable, BIR 2316 item 35)">PTO pay</th>
-              <th class="num" title="De minimis benefits (non-taxable). Computed automatically each cutoff — the standard amount, prorated by working days when a start date falls inside the cutoff. Not editable.">De minimis</th>
+              <th class="num" title="De minimis benefits (non-taxable). Computed automatically each cutoff — the standard amount, less a day's de minimis (standard × 24 ÷ 261) per working day before the start date or after the last day. Not editable.">De minimis</th>
               <th class="num" title="Quarterly bonus (taxable), and what it is for — shown on the payslip">Q. bonus</th>
               <th class="num" title="Commission (taxable). A negative amount is a deduction.">Commission</th>
               <th class="num" title="Non-taxable income in total: 13th month (tax-free part), anniversary bonus, de minimis, PTO, travel allowance and other non-taxable items. Taken off before tax.">Non-tax income</th>
@@ -1020,7 +1020,7 @@
           <li><strong>Overtime.</strong> Credited for hours worked after 7:00PM. Regular workday 1.25×; rest day or special non-working day 1.69× (130% base × 130% OT premium); regular holiday 2.60× (200% base × 130% OT premium).</li>
           <li><strong>Night differential.</strong> Hourly rate × 10% × night hours worked, for hours between 10:00PM and 6:00AM. The 10% is computed on the <em>base</em> hourly rate, per the process document.</li>
           <li><strong>Transportation allowance.</strong> Entered directly as an amount per cutoff, non-taxable.</li>
-          <li><strong>De minimis.</strong> Computed automatically, never encoded: the standard ₱1,500 per cutoff, non-taxable, prorated by working days when a start date falls inside the cutoff. Someone hired after the cutoff closed gets none. Change the standard amount in Settings.</li>
+          <li><strong>De minimis.</strong> Computed automatically, never encoded: the standard ₱1,500 per cutoff, non-taxable, less ₱137.93 a day (₱1,500 × 2 × 12 ÷ 261) for every working day before the start date or after the last day — never below 0. Absences don't change it. Someone hired after the cutoff closed gets none. Change the standard amount in Settings.</li>
           <li><strong>Contributions.</strong> SSS from the 2026 table (Regular EE + MPF EE); PhilHealth 2.5% employee and 2.5% employer; HDMF a flat ₱200 each side. Each is deducted whole on its own payout: <strong>SSS on the 25th (pay period 2)</strong>, <strong>PhilHealth and HDMF on the 10th (pay period 1)</strong>.</li>
           <li><strong>Managers.</strong> Treated as managerial staff exempt under Art. 82 of the Labor Code — no overtime, night differential, rest day or holiday premium.</li>
           <li><strong>Daily rate.</strong> Monthly × 12 ÷ 261 working days (Mon–Fri with regular holidays paid). Change the factor above if your company uses 313, 314 or 365.</li>

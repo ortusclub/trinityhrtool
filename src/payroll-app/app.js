@@ -839,12 +839,12 @@
         cellIn('alw', dtrInput(emp, 'travelDeduction', false, 92, true)) +
         cellIn('alw', dtrInput(emp, 'exMilestones', false, 92, true)) +
         cellIn('alw', dtrInput(emp, 'ptoPay', false, 92, true)) +
-        // Computed, never typed: the standard amount, prorated by working days
-        // when the start date lands inside the cutoff.
+        // Computed, never typed: the standard amount less a day's de minimis
+        // per day before the start date or after the last day.
         '<td class="num' + (e.deMinimis ? '' : ' zero') + '">' + plain(e.deMinimis) +
-          (e.deMinimisProrated
-            ? '<div class="auto-note">' + e.deMinimisAuto.workDaysOnStaff + '/' +
-              e.deMinimisAuto.workDaysTotal + ' days of ' + plain(e.deMinimisAuto.full) + '</div>'
+          (e.deMinimisProrated && e.deMinimisAuto
+            ? '<div class="auto-note">' + plain(e.deMinimisAuto.full) + ' \u2212 ' + e.deMinimisAuto.daysOff +
+              ' day' + (e.deMinimisAuto.daysOff === 1 ? '' : 's') + ' \u00d7 ' + plain(e.deMinimisAuto.daily) + ' off staff</div>'
             : '') + '</td>' +
         cellIn('alw', dtrInput(emp, 'quarterlyBonus', false, 92, true) + bonusDetailsInput(emp)) +
         cellIn('alw', dtrInput(emp, 'commission', false, 92, true)) +

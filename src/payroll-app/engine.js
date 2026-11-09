@@ -133,22 +133,24 @@
   }
 
   /**
-   * De minimis for one cutoff. It is a flat amount per cutoff, but somebody
-   * who started partway through only earns the share of the cutoff they were
-   * actually on staff for, counted in working days. A start date on or before
-   * the cutoff opens gets the full amount; one after it closes gets nothing.
+   * De minimis for one cutoff: the standard amount, less a day's de minimis
+   * for every working day of the cutoff before the start date or after the
+   * last day (from the 201 File dates — nothing to type). Absences do not
+   * touch it (Japheth, 9 Nov 2026). A day's de minimis follows the
+   * daily-rate formula: standard x 2 (a month) x 12 / 261, so ₱1,500 is
+   * ₱137.93 a day. Never below 0. As the company's payroll files have it
+   * for new hires and leavers (1 day off → 1,362.07; 5 → 810.35).
    */
   function deMinimisFor(emp, period, settings) {
     var full = num(settings.defaultDeMinimis);
     var st = staffDays(emp, period, settings);
-    if (!st.partial) {
-      return { amount: r2(full), full: r2(full), prorated: false,
-               factor: 1, workDaysOnStaff: 0, workDaysTotal: 0 };
-    }
-    var factor = st.total ? st.onStaff / st.total : 0;
+    var daily = r2(full * 2 * 12 / settings.dayFactor);   // rounded first, as the files do
+    var daysOff = st.offDays;
+    var amount = daysOff ? r2(Math.max(0, full - daily * daysOff)) : r2(full);
     return {
-      amount: r2(full * factor), full: r2(full), prorated: true,
-      factor: factor, workDaysOnStaff: st.onStaff, workDaysTotal: st.total
+      amount: amount, full: r2(full), prorated: daysOff > 0,
+      daily: daily, daysOff: daysOff, offStaffDays: st.offDays,
+      workDaysOnStaff: st.onStaff, workDaysTotal: st.total
     };
   }
 
@@ -492,8 +494,9 @@
 
     /* ---------------- allowances (cols O, P) ---------------------------
        Transportation allowance is entered directly as an amount. De minimis
-       is not entered at all: it is always the standard amount, prorated by
-       working days when the start date falls inside the cutoff. Any value
+       is not entered at all: it is always the standard amount, less a day's
+       de minimis per day before the start date or after the last day
+       (deMinimisFor). Absences do not touch it. Any value
        left in a stored timesheet by an earlier version is ignored on
        purpose — there is no longer a way to set one, so honouring an old one
        would freeze an amount nobody can see or clear. Both are non-taxable. */

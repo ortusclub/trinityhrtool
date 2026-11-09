@@ -2134,8 +2134,12 @@
       var posted = E.isPostedPeriod(state.dtr, fp.period.id);
       var slip = E.computeRun([emp], fp.period, state.dtr, state.settings).slips[0];
       var row = '<tr>' + head +
-        '<td class="num">' + box(emp, 'thirteenth') + plain(fp.thirteenth) +
-          '<div class="auto-note">' + (fp.thirteenthPaid ? plain(fp.thirteenthPaid) + ' paid already' : 'none paid yet') + '</div></td>' +
+        '<td class="num">' + box(emp, 'thirteenth') + plain(fp.thirteenthDue) +
+          '<div class="auto-note">basic earned ' + plain(fp.basicEarned) + ' \u00f7 ' + fp.thirteenthDivisor + ' = ' +
+            plain(fp.thirteenthYear) + ', ' + (fp.thirteenthPaid ? plain(fp.thirteenthPaid) + ' paid already' : 'none paid yet') + '</div>' +
+          (fp.yearEndBonusDue ? '<div class="auto-note">+ year-end non-taxable bonus ' + plain(fp.yearEndBonusDue) + '</div>' : '') +
+          (cfg.thirteenth === false ? '<div class="auto-note" style="color:var(--red)">not included \u2014 tick to pay it</div>' : '') +
+          '</td>' +
         '<td class="num">' + box(emp, 'leave') +
           '<input type="text" inputmode="decimal" data-fp-leave="' + id + '" value="' +
           esc(cfg.leaveDays === undefined || cfg.leaveDays === null ? '' : cfg.leaveDays) + '" placeholder="' +
@@ -2144,8 +2148,10 @@
             (fp.leaveHiredSameYear ? ' (hired this year)' : '') + ' = ' + plain(fp.leaveEarnedExact) +
             (fp.leaveEarnedExact !== fp.leaveEarned ? ' \u2192 ' + plain(fp.leaveEarned) : '') + ' earned, ' +
           plain(fp.leaveUsed) + ' taken' + (fp.leaveFromTrinity ? '' : ' \u2014 payroll files, no TrinityHR leave') + '</div>' +
-          '<div class="auto-note">' + plain(fp.leaveAmount) + ' at ' + plain(fp.dailyRate) + '/day' +
-          (fp.leaveTaxable ? ', ' + plain(fp.leaveTaxable) + ' taxable' : '') + '</div></td>' +
+          '<div class="auto-note">' + plain(fp.leaveAmountDue) + ' at ' + plain(fp.dailyRate) + '/day' +
+          (fp.leaveTaxable ? ', ' + plain(fp.leaveTaxable) + ' taxable' : '') + '</div>' +
+          (cfg.leave === false ? '<div class="auto-note" style="color:var(--red)">not included \u2014 tick to pay it</div>' : '') +
+          '</td>' +
         '<td class="num">' + box(emp, 'tax') + plain(fp.taxAdjustment) +
           '<div class="auto-note">' + (fp.taxAdjustment >= 0 ? 'refund' : 'tax still due') + ' \u2014 due ' + plain(fp.annualTaxDue) +
           ' on ' + plain(fp.annualTaxable) + ', withheld ' + plain(fp.ytdWithheld) + '</div></td>' +

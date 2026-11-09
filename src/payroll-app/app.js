@@ -1011,7 +1011,7 @@
       position: s.employee.position, department: s.employee.department,
       rate: s.rates.monthly, payPeriod: s.period.payPeriodNo,
       regularPay: s.rates.semiMonthly, otHours: d.otHours, otPay: e.otPay,
-      ndHours: d.ndHours, ndPay: e.ndPay,
+      ndHours: d.ndHours, ndPay: e.ndPay, restDayHours: d.restDayHours, restDayPay: e.restDayPay,
       deMinimis: E.r2(e.deMinimis + e.deMinimisDeduction), quarterlyBonus: e.quarterlyBonus,
       bonusDetails: e.quarterlyBonusDetails || '', commission: e.commission, nonTaxTotal: e.nonTaxable,
       thirteenth: e.thirteenthMonth, exMilestones: e.companyBonus, ptoPay: e.ptoPay || 0, sssLoan: p.sssLoan, classPass: p.classPass,
@@ -1122,7 +1122,7 @@
     psApi('ot-nd?from=' + period.start + '&to=' + period.end).then(function (data) {
       var byEmail = {};
       (data.people || []).forEach(function (p) { byEmail[p.email] = p; });
-      var dtr = Object.assign({}, state.dtr), filled = 0, flagged = [];
+      var dtr = Object.assign({}, state.dtr), filled = 0, flagged = [], rested = [];
       state.runEmployees.forEach(function (emp) {
         var p = byEmail[String(emp.email || '').trim().toLowerCase()];
         if (!p) return;
@@ -1130,22 +1130,29 @@
         if (d.posted) return;
         var x = splitOtNd(p, period), set = false;
         OTND_FIELDS.forEach(function (f) { if (!E.num(d[f]) && x[f]) { d[f] = x[f]; set = true; } });
+        // Rest-day work (1.30) has its own columns, REST DAY HOURS / PAY.
         // The template has one OT column (1.25); rest-day and holiday OT is
-        // paid in SALARY ADJ and named in Remarks.
-        var odd = x.detail.restDayHours.map(function (t) { return t + ' (rest day 1.30)'; })
-          .concat(x.detail.otRestSpecialHours.map(function (t) { return t + ' (OT 1.69)'; }))
+        // paid in SALARY ADJ and named in Remarks. A note an earlier
+        // download wrote is replaced, not repeated.
+        var odd = x.detail.otRestSpecialHours.map(function (t) { return t + ' (OT 1.69)'; })
           .concat(x.detail.otRegHolidayHours.map(function (t) { return t + ' (OT 2.60)'; }));
-        if (odd.length) {
-          d.remarks = (d.remarks ? d.remarks + '; ' : '') + 'In SALARY ADJ \u2014 rest day / holiday work: ' + odd.join(', ');
-          flagged.push(emp.lastName + ', ' + emp.firstName + ' — ' + odd.join(', '));
-        }
-        if (set) { dtr[key] = d; filled++; }
+        var NOTE = /(^|;\s*)In SALARY ADJ \u2014 rest day \/ holiday (work|OT): [^;]*/g;
+        var kept = String(d.remarks || '').replace(NOTE, '').replace(/^;\s*/, '').trim();
+        var remarks = odd.length ? (kept ? kept + '; ' : '') + 'In SALARY ADJ \u2014 rest day / holiday OT: ' + odd.join(', ') : kept;
+        var noted = (remarks || null) !== (d.remarks || null);
+        if (noted) d.remarks = remarks || null;
+        if (odd.length) flagged.push(emp.lastName + ', ' + emp.firstName + ' — ' + odd.join(', '));
+        if (x.restDayHours) rested.push(emp.lastName + ', ' + emp.firstName + ' — ' + x.detail.restDayHours.join(', '));
+        if (set || noted) dtr[key] = d;
+        if (set) filled++;
       });
       var run = E.computeRun(state.runEmployees, period, dtr, state.settings);
       note.innerHTML = '<div class="notice" style="margin-bottom:12px">OT and ND hours from TrinityHR filled in the template for ' +
         filled + ' employee(s) — approved overtime requests and scheduled night shifts, ' +
         esc(E.fmtShort(E.parseYmd(period.start))) + ' – ' + esc(E.fmtShort(E.parseYmd(period.end))) + '.' +
-        (flagged.length ? '<br>Work on a rest day or holiday \u2014 paid in SALARY ADJ (rest day 1.30, OT 1.69 / 2.60) and named in Remarks: ' +
+        (rested.length ? '<br>Rest day work \u2014 in REST DAY HOURS / REST DAY PAY (hourly rate \u00d7 130%): ' +
+          rested.map(esc).join('; ') : '') +
+        (flagged.length ? '<br>Overtime on a rest day or holiday \u2014 paid in SALARY ADJ (OT 1.69 / 2.60) and named in Remarks: ' +
           flagged.map(esc).join('; ') : '') + '</div>';
       save(dtr, run);
     }).catch(function (e) {

@@ -43,6 +43,11 @@
     { head: 'REGULAR OVERTIME PAY', key: 'otPay', width: 12 },
     { head: 'NIGHT DIFFERENTIAL HOURS', key: 'ndHours', input: 'ndHours', width: 12 },
     { head: 'NIGHT DIFFERENTIAL PAY', key: 'ndPay', width: 12 },
+    // Work on the employee's day off (first 8 hours of the day): hourly rate
+    // x 130%. Overtime past 8 hours that day (OT 1.69) is not in here.
+    { head: 'REST DAY HOURS', key: 'restDayHours', input: 'restDayHours', width: 11,
+      alias: ['RESTDAY HOURS', 'REST DAY WORK HOURS'] },
+    { head: 'REST DAY PAY', key: 'restDayPay', width: 12, alias: ['RESTDAY PAY', 'REST DAY WORK PAY'] },
     // Taxable; BIR 2316 item 45.
     // Not written to the template or the summary (sheet: false), but still
     // read from a file that has the column.
@@ -108,7 +113,7 @@
      No month names: the importer reads the cutoff from the title rows. */
   var FORMAT_HINTS = {
     newRate: 'monthly, e.g. 45,000.00', newRateDate: 'date, e.g. 2026-09-15',
-    otHours: 'hours, e.g. 2.5', ndHours: 'hours, e.g. 1.5',
+    otHours: 'hours, e.g. 2.5', ndHours: 'hours, e.g. 1.5', restDayHours: 'hours, e.g. 8',
     quarterlyBonus: 'amount, e.g. 5,000.00', bonusDetails: 'text; ";" between items',
     commission: 'amount, e.g. 5,000.00',
     exMilestones: 'amount, e.g. 10,000.00', ptoPay: 'amount, e.g. 2,000.00',
@@ -197,9 +202,10 @@
       var backPay = E2((e.taxableAllowances || []).reduce(function (t, a) {
         return /back pay|^salary adjustment$/i.test(a.label) ? t + a.amount : t;
       }, 0));
-      // Rest-day work and rest-day / holiday overtime (OT 1.69, OT 2.60,
-      // Rest 1.30) go in SALARY ADJ beside any back pay; Remarks names them.
-      var restDayWork = E2(e.otPayRestSpecial + e.otPayRegHoliday + e.restDayPay);
+      // Rest-day / holiday overtime (OT 1.69, OT 2.60) goes in SALARY ADJ
+      // beside any back pay; Remarks names it. Rest-day work (1.30) has its
+      // own columns.
+      var restDayWork = E2(e.otPayRestSpecial + e.otPayRegHoliday);
       // Non-taxable pay with no column here: recurring items, the year-end
       // bonus, leave monetization, older non-taxable income.
       var otherNonTax = E2(e.totalNonTaxAllowance - (e.companyBonus || 0) - (e.ptoPay || 0) + (e.nonTaxableIncome || 0));
@@ -230,6 +236,8 @@
         otPay: rf ? f('ROUND(' + hourly + '*' + prem.ot + '*' + C('otHours') + ',2)') : n(0),
         ndHours: inp(d.ndHours),
         ndPay: rf ? f('ROUND(' + hourly + '*' + prem.nd + '*' + C('ndHours') + ',2)') : n(0),
+        restDayHours: inp(d.restDayHours),
+        restDayPay: rf ? f('ROUND(' + hourly + '*' + prem.restDay + '*' + C('restDayHours') + ',2)') : n(0),
         thirteenth: n(e.thirteenthMonth),
         exMilestones: inp(e.companyBonus),
         ptoPay: inp(e.ptoPay),
@@ -251,7 +259,7 @@
         prorationDeduction: n(e.prorationDeduction),
         dmDeduction: n(e.deMinimisDeduction),
         travelDeduction: inp(e.travelDeduction),
-        gross: f(C('regularPay') + '+' + C('otPay') + '+' + C('ndPay') + '+' + C('deMinimis') + '+' +
+        gross: f(C('regularPay') + '+' + C('otPay') + '+' + C('ndPay') + '+' + C('restDayPay') + '+' + C('deMinimis') + '+' +
           C('quarterlyBonus') + (at.commission ? '+' + C('commission') : '') + '+' +
           C('thirteenth') + '+' + C('exMilestones') + '+' + C('ptoPay') + '+' + C('salaryAdj') + '+' + C('travel') + '-' + C('absenceDeduction') + '-' +
           C('lateDeduction') + '-' + C('undertimeDeduction') + '-' + C('prorationDeduction') + '-' +

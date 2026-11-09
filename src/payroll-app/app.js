@@ -467,14 +467,38 @@
         'Only the people in the file are on this cutoff. ' +
         '<button class="btn ghost tiny" id="btnUnpost" type="button">Recalculate this cutoff instead</button></div>';
     }
-    if (noRate.length) {
-      html += '<div class="notice warn note-card"><strong>' + noRate.length + ' employee' +
-        (noRate.length === 1 ? ' has' : 's have') + ' no monthly rate</strong> and ' +
-        (noRate.length === 1 ? 'is' : 'are') + ' left off this cutoff. Import salaries on the ' +
-        'Employees tab, or import a payroll file — a blank rate is filled from it.<ul>' + noRate.slice(0, 12).map(function (e) {
-          return '<li>' + esc(e.id) + ' — ' + esc((e.lastName || '') + ', ' + (e.firstName || '')) + '</li>';
-        }).join('') + (noRate.length > 12 ? '<li>…and ' + (noRate.length - 12) + ' more</li>' : '') +
+    /* A company where several people are on the roster and nobody has a
+       rate is paid elsewhere (Ortus Strategy: Wise / No-Tax payslips), so
+       its people are only counted, under Show notes. Anyone else without a
+       rate — a new hire, a company's first person — is someone this payroll
+       should pay: always shown, never behind Show notes. */
+    var rated = {}, staff = {};
+    state.employees.forEach(function (e) {
+      var c = e.company || '';
+      staff[c] = (staff[c] || 0) + 1;
+      if (E.num(e.monthlyRate)) rated[c] = true;
+    });
+    var elsewhere = {};
+    var missing = noRate.filter(function (e) {
+      var c = e.company || '';
+      if (!rated[c] && staff[c] > 1) { elsewhere[c] = (elsewhere[c] || 0) + 1; return false; }
+      return true;
+    });
+    if (missing.length) {
+      html += '<div class="notice warn"><strong>' + missing.length + ' employee' +
+        (missing.length === 1 ? ' has' : 's have') + ' no monthly rate</strong> and ' +
+        (missing.length === 1 ? 'is' : 'are') + ' left off this cutoff. Type the monthly rate on the ' +
+        'Employees tab, import salaries there, or import a payroll file — a blank rate is filled from it.<ul>' +
+        missing.slice(0, 12).map(function (e) {
+          return '<li>' + esc(e.id) + ' — ' + esc((e.lastName || '') + ', ' + (e.firstName || '')) +
+            ' <span class="muted">' + esc(e.company || '') + (e.dateHired ? ', started ' + esc(e.dateHired) : '') + '</span></li>';
+        }).join('') + (missing.length > 12 ? '<li>…and ' + (missing.length - 12) + ' more</li>' : '') +
         '</ul></div>';
+    }
+    var elsewhereNames = Object.keys(elsewhere);
+    if (elsewhereNames.length) {
+      html += '<p class="hint note-card" style="margin:0 0 12px">Not on this payroll — no rates on file for anyone at ' +
+        elsewhereNames.map(function (c) { return esc(c || '(no company)') + ' (' + elsewhere[c] + ')'; }).join(', ') + '.</p>';
     }
     var p = state.period;
     var leaving = state.runEmployees.filter(function (e) {

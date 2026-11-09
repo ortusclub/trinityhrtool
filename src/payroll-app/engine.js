@@ -1374,8 +1374,13 @@
     var taxYear = parseYmd(period.payoutDate).getFullYear();
 
     var ye = yearEndFor(emp, workYear, dtrMap, settings);
+    /* The 13th month still owed is always worked out (thirteenthDue), so it
+       shows even when it is left out; `thirteenth` is what is paid. The
+       year-end non-taxable bonus is paid with it, pro rata, as in the
+       November payout. */
     var thirteenth = on('thirteenth') ? ye.thirteenthBalance : 0;
     var thirteenthTaxable = on('thirteenth') ? ye.thirteenthBalanceTaxable : 0;
+    var yearEndBonus = on('thirteenth') ? ye.yearEndBonus : 0;
 
     var leave = ye.leave, daily = rateSet(emp, settings).daily;
     // Hired and leaving in the same year: the new-hire credits (10) × the
@@ -1395,6 +1400,7 @@
     var typed = cfg.leaveDays !== undefined && cfg.leaveDays !== null && cfg.leaveDays !== '';
     var leaveDays = on('leave') ? r2(Math.max(0, typed ? num(cfg.leaveDays) : leaveUnused)) : 0;
     var leaveAmount = r2(leaveDays * daily);
+    var leaveAmountDue = r2((typed ? Math.max(0, num(cfg.leaveDays)) : leaveUnused) * daily);
     var exemptDays = num(((settings.finalPay || {}).leaveExemptDays));
     var leaveTaxable = r2(Math.max(0, leaveDays - exemptDays) * daily);
 
@@ -1424,6 +1430,10 @@
     return {
       period: period,
       thirteenth: thirteenth, thirteenthTaxable: thirteenthTaxable, thirteenthPaid: ye.thirteenthPaid,
+      thirteenthDue: ye.thirteenthBalance, thirteenthYear: ye.thirteenthMonth,
+      basicEarned: r2(ye.ytd.basicEarned), thirteenthDivisor: settings.yearEnd.thirteenthMonthDivisor || 12,
+      yearEndBonus: yearEndBonus, yearEndBonusDue: ye.yearEndBonus,
+      leaveAmountDue: leaveAmountDue,
       leaveDays: leaveDays, leaveSuggested: leaveUnused, leaveEarned: leaveEarned, leaveCredits: credits,
       leaveUsed: leave.usedThisYear, monthsWorked: r2(months), leaveEarnedExact: r2(credits * months / 12),
       leaveFromTrinity: leave.fromTrinity, leaveHiredSameYear: hiredSameYear,
@@ -1455,7 +1465,8 @@
       var settled = emp.finalPay && emp.finalPay.periodId && periodById(emp.finalPay.periodId) &&
         periodById(emp.finalPay.periodId).payoutDate < period.payoutDate;
       if (fp) {
-        extra = { thirteenthMonth: fp.thirteenth, thirteenthMonthTaxable: 0, taxRefund: fp.taxAdjustment, finalPay: fp };
+        extra = { thirteenthMonth: fp.thirteenth, thirteenthMonthTaxable: 0, yearEndBonus: fp.yearEndBonus,
+          taxRefund: fp.taxAdjustment, finalPay: fp };
       } else if ((post13th || postRefund || postLeave) && !settled) {
         var calc = yearEndFor(emp, year, dtrMap, settings);
         extra = {

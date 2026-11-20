@@ -1221,7 +1221,7 @@ function AddUserModal({
                 <option value="employee">Employee</option>
                 <option value="consultant">Consultant</option>
               </select>
-              <p className="mt-1 text-xs text-gray-400">Consultants don&apos;t get CTO compensation for holiday work.</p>
+              <p className="mt-1 text-xs text-gray-400">Consultants get CTO for holiday work — holiday pay is for PH employees only.</p>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Department</label>

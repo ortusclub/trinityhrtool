@@ -241,7 +241,7 @@ export function UserProfileForm({
             <option value="consultant">Consultant</option>
           </select>
           <p className="mt-1 text-xs text-gray-400">
-            Consultants get CTO for holiday work — holiday pay is for PH employees only.
+            Consultants can only select CTO for holiday work.
           </p>
         </Field>
         <Field label="Department">

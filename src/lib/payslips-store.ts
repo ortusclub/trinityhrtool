@@ -75,7 +75,7 @@ export async function getBatch(db: SupabaseClient, id: string) {
   const [{ data, error }, { data: release, error: relError }] = await Promise.all([
     db
       .from("payslips")
-      .select("employee_id, net_pay, prepared_at, lines, employee:users!payslips_employee_id_fkey(email, full_name, preferred_name, first_name, last_name)")
+      .select("employee_id, net_pay, gross_pay, total_deductions, prepared_at, lines, employee:users!payslips_employee_id_fkey(email, full_name, preferred_name, first_name, last_name)")
       .eq("period_id", id),
     db.from("payslip_releases").select("published_at").eq("period_id", id).maybeSingle(),
   ]);

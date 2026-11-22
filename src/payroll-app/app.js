@@ -242,6 +242,15 @@
      staff with a rate. A paid cutoff computed here (not from a file) is
      worked out from the employees as they were when it was marked paid
      (d.paidEmp), so a later rate change, loan or new hire does not touch it. */
+  /* PH or Non-PH. Set per person on the Non-PH Employees tab
+     (emp.payrollGroup); until then, PH staff are the ones with a 201
+     "ID000…" number or a PH monthly rate, and Non-PH (Kosovo, Italy, the
+     US, the UAE, South Korea …, numbered 10, 12, 30 …) everyone else. */
+  function isPhPayroll(emp) {
+    if (emp.payrollGroup) return emp.payrollGroup !== 'nonph';
+    return /^ID/i.test(String(emp.id || '')) || E.num(emp.monthlyRate) > 0;
+  }
+
   function runEmployeesFor(period) {
     var postedHere = E.isPostedPeriod(state.dtr, period.id);
     var list = state.employees.filter(function (e) {
@@ -249,7 +258,7 @@
       if (d && d.posted) return true;
       // Final pay can land in a cutoff after the last day; they're on it then.
       var finalHere = e.finalPay && e.finalPay.periodId === period.id;
-      return !postedHere && (onStaff(e, period) || finalHere) && E.num(e.monthlyRate) > 0;
+      return !postedHere && isPhPayroll(e) && (onStaff(e, period) || finalHere) && E.num(e.monthlyRate) > 0;
     });
     if (paidOf(period.id)) {
       var snap = state.employees.map(function (e) {
@@ -457,7 +466,7 @@
     state.runEmployees.forEach(function (e) { inRun[e.id] = true; });
     var postedHere = E.isPostedPeriod(state.dtr, state.period.id);
     var noRate = postedHere ? [] : state.employees.filter(function (e) {
-      return !inRun[e.id] && onStaff(e, state.period) && !E.num(e.monthlyRate);
+      return !inRun[e.id] && isPhPayroll(e) && onStaff(e, state.period) && !E.num(e.monthlyRate);
     });
     var posted = state.run.slips.filter(function (s) { return s.posted; }).length;
     if (posted) {
@@ -473,7 +482,7 @@
        rate — a new hire, a company's first person — is someone this payroll
        should pay: always shown, never behind Show notes. */
     var rated = {}, staff = {};
-    state.employees.forEach(function (e) {
+    state.employees.filter(isPhPayroll).forEach(function (e) {
       var c = e.company || '';
       staff[c] = (staff[c] || 0) + 1;
       if (E.num(e.monthlyRate)) rated[c] = true;
@@ -523,7 +532,7 @@
             ' <span class="muted">started ' + esc(e.dateHired) + '</span></li>';
         }).join('') + '</ul></div>';
     }
-    var off = state.employees.length - state.runEmployees.length - noRate.length;
+    var off = state.employees.filter(isPhPayroll).length - state.runEmployees.filter(isPhPayroll).length - noRate.length;
     if (off && postedHere) {
       html += '<p class="hint" style="margin:0 0 12px">' + off + ' employee' +
         (off === 1 ? ' is' : 's are') + ' on the roster but not in this cutoff\'s payroll file.</p>';
@@ -2120,7 +2129,7 @@
       // Only people on this payroll (with a monthly rate), as on Payroll Run,
       // and anyone whose final pay is on record.
       if (e.finalPay && e.finalPay.recorded) return true;
-      if (!(E.num(e.monthlyRate) > 0)) return false;
+      if (!(E.num(e.monthlyRate) > 0) || !isPhPayroll(e)) return false;
       return (isDate(e.endDate) && e.endDate >= from) || (e.finalPay && e.finalPay.periodId);
     }).sort(function (a, b) { return String(b.endDate).localeCompare(String(a.endDate)); });
     if (!people.length) {
@@ -2309,7 +2318,7 @@
   ];
 
   function birPeople() {
-    return state.employees.map(function (emp) {
+    return state.employees.filter(isPhPayroll).map(function (emp) {
       return { emp: emp, f: E.bir2316For(emp, state.year, state.dtr, state.settings) };
     }).filter(function (x) { return x.f.cutoffs > 0; })
       .sort(function (a, b) { return (a.emp.lastName + a.emp.firstName).localeCompare(b.emp.lastName + b.emp.firstName); });
@@ -2545,6 +2554,8 @@
       return;
     }
     $('#empBody').innerHTML = state.employees.map(function (emp, i) {
+      // Non-PH staff are on the Non-PH Employees tab; the index stays the roster's.
+      if (!isPhPayroll(emp)) return '';
       var r = E.rateSet(emp, state.settings);
       var itemCount = (emp.items || []).length;
       return '<tr' + sortAttrs(emp) + '>' +
@@ -3323,7 +3334,7 @@
     $('#selMonetize').innerHTML = opts;
     $('#selMonetize').value = state.settings.yearEnd.leaveMonetizePeriodId || '';
 
-    var calcs = state.employees.map(function (emp) {
+    var calcs = state.employees.filter(isPhPayroll).map(function (emp) {
       return { emp: emp, ye: E.yearEndFor(emp, state.year, state.dtr, state.settings) };
     });
 
@@ -4718,6 +4729,21 @@
     $('#empSearch').addEventListener('input', filterEmployees);
     applySort('run');
   }
+
+  /* For nonph.js (the Non-PH payroll), which shares the roster, storage
+     and payslip uploads with this one. */
+  window.PayrollApp = {
+    state: state, E: E, Store: Store, $: $, $$: $$, esc: esc, plain: plain, parseAmount: parseAmount,
+    onStaff: onStaff, isPhPayroll: isPhPayroll, psApi: psApi, psMoney: psMoney, psDay: psDay,
+    readPayslipRows: readPayslipRows, psLoadBatches: psLoadBatches, psShowMissed: psShowMissed,
+    wiseShowSummary: wiseShowSummary, switchTab: switchTab, MONTHS: MONTHS,
+    leave: function (cb) {
+      if (liveLeave.byEmail) return cb(liveLeave.byEmail);
+      loadLiveLeave();
+      var t = setInterval(function () { if (liveLeave.byEmail) { clearInterval(t); cb(liveLeave.byEmail); } }, 300);
+    },
+    refreshPh: function () { renderRun(); renderEmployees(); }
+  };
 
   // Started by sync.js once the shared payroll is loaded.
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

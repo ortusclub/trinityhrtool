@@ -10,6 +10,7 @@ const FILES: Record<string, string> = {
   "index.html": "text/html; charset=utf-8",
   "styles.css": "text/css; charset=utf-8",
   "app.js": "text/javascript; charset=utf-8",
+  "nonph.js": "text/javascript; charset=utf-8",
   "sync.js": "text/javascript; charset=utf-8",
   "data.js": "text/javascript; charset=utf-8",
   "engine.js": "text/javascript; charset=utf-8",

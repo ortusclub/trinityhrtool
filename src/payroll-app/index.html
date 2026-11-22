@@ -13,11 +13,27 @@
     <span class="logo">T</span>
     <div>
       <h1 id="companyName">Trinity Outsourcing Solutions Inc.</h1>
-      <p class="sub">Philippine semi-monthly payroll · paid every 10th &amp; 25th</p>
+      <p class="sub" id="scopeSub">Philippine semi-monthly payroll · paid every 10th &amp; 25th</p>
     </div>
   </div>
   <button class="btn ghost" id="btnToggleNotes" type="button" aria-expanded="false">Show notes</button>
 </header>
+
+<div class="scopebar" id="scopeBar" role="tablist" aria-label="Payroll">
+  <button class="scope active" data-scope="ph" type="button" role="tab">PH</button>
+  <button class="scope" data-scope="nonph" type="button" role="tab">Non-PH</button>
+</div>
+
+<nav class="tabs hidden" id="npTabs">
+  <button class="tab active" data-np-tab="run" type="button">Payroll Run</button>
+  <button class="tab" data-np-tab="finalpay" type="button">Final Pay</button>
+  <button class="tab" data-np-tab="employees" type="button">Employees</button>
+  <button class="tab" data-np-tab="holidays" type="button">Holidays</button>
+  <button class="tab" data-np-tab="contrib" type="button">Contributions</button>
+  <button class="tab" data-np-tab="payslip" type="button">Payslip</button>
+  <button class="tab" data-np-tab="settings" type="button">Settings &amp; Rules</button>
+  <button class="tab" data-np-tab="process" type="button">Notes/Process</button>
+</nav>
 
 <nav class="tabs" id="tabs">
   <button class="tab active" data-tab="run" type="button">Payroll Run</button>
@@ -505,7 +521,7 @@
       <div class="notice warn hidden" id="psUnmatched" style="margin:0 20px 18px"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="psUploadCard">
       <div class="card-head">
         <h2>Upload Non-Trinity payslips</h2>
         <p class="hint" style="display:block">
@@ -533,7 +549,7 @@
       <div class="notice warn hidden" id="upUnmatched" style="margin:0 20px 18px"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="psWiseCard">
       <div class="card-head">
         <h2>Wise bulk payments</h2>
         <p class="hint" style="display:block">
@@ -549,7 +565,7 @@
       <div id="wiseSummary" class="muted" style="padding:0 20px 18px"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="psBatchesCard">
       <div class="card-head">
         <h2>All payslip batches</h2>
         <p class="hint" style="display:block">Everything prepared or uploaded, newest payout first.</p>
@@ -1053,6 +1069,176 @@
       </div>
     </div>
 </section>
+  <!-- ======================= NON-PH PAYROLL (nonph.js) ======================= -->
+  <section class="panel hidden np-panel" id="np-run">
+    <div class="period-bar">
+      <div class="field">
+        <label for="npMonth">Month</label>
+        <select id="npMonth"></select>
+      </div>
+      <div class="field narrow">
+        <label for="npYear">Year</label>
+        <select id="npYear"></select>
+      </div>
+      <div class="period-meta" id="npMeta"></div>
+      <div class="period-actions">
+        <button class="btn ghost" id="npExport" type="button">Export summary (.xlsx)</button>
+        <button class="btn" id="npToPayslips" type="button">Payslips for this month</button>
+      </div>
+    </div>
+    <div class="stat-row" id="npStats"></div>
+    <div id="npNotice"></div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Monthly payroll</h2>
+        <p class="hint" style="display:block">
+          One run a month, paid on the 25th (the Friday before when it falls on a weekend). Gross salary is the
+          monthly rate, prorated by working days for anyone who starts or leaves in the month (weekends and their
+          country's holidays don't count). Type commission, bonus, reimbursement and deductions in the white cells;
+          they save for everyone. <strong>XK</strong> (Kosovo): 5% employee + 5% employer pension and Kosovo
+          withholding tax, in EUR — none for tax status Foreign. <strong>No-Tax</strong>: no deductions, paid in
+          the person's currency.
+        </p>
+      </div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact" id="npRunTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden np-panel" id="np-finalpay">
+    <div class="card">
+      <div class="card-head">
+        <h2>Final pay — Non-PH</h2>
+        <p class="hint" style="display:block">
+          Non-PH staff with a last day this year. Their final month's salary is prorated on the Payroll Run.
+          Unused Annual Leave (from TrinityHR) is paid at the daily rate (monthly rate × 12 ÷ 261); tick
+          <strong>Pay leave</strong> to add it to the final month as "Unused leave". Days can be changed.
+        </p>
+      </div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact" id="npFinalTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden np-panel" id="np-employees">
+    <div class="card">
+      <div class="card-head">
+        <h2>Non-PH employees</h2>
+        <p class="hint" style="display:block">
+          Everyone on the Non-PH payroll. Country comes from their TrinityHR account (User Management) and decides
+          their holidays and rules: Kosovo → XK, anyone else → No-Tax (change it per person under Rules). Monthly
+          rate and currency are this payroll's own and never touch the PH figures.
+        </p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 8px">
+        <label>Search <input type="search" id="npEmpSearch" placeholder="Name, ID, email, company"></label>
+        <label>Move someone from PH to Non-PH <select id="npMoveIn"></select></label>
+        <label>Import rates (.xlsx/.csv: ID or Email, Monthly rate, Currency) <input type="file" id="npRateFile" accept=".xlsx,.xls,.csv"></label>
+      </div>
+      <div id="npEmpMsg" style="padding:0 20px"></div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact" id="npEmpTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden np-panel" id="np-holidays">
+    <div class="card">
+      <div class="card-head">
+        <h2>Holidays — Non-PH <span class="muted" id="npHolYear"></span></h2>
+        <p class="hint" style="display:block" id="npHolSource">
+          From Manage Holidays: Kosovo, Italy, the United States, the UAE and South Korea (and the Philippines,
+          for Non-PH staff based there). Add, change or remove holidays there.
+        </p>
+      </div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact" id="npHolTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden np-panel" id="np-contrib">
+    <div class="card">
+      <div class="card-head">
+        <h2>Kosovo pension contributions (Trust)</h2>
+        <p class="hint" style="display:block">
+          Employee and employer pension for XK staff, month by month, as the Payroll Run computes them.
+        </p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 8px">
+        <label>From <select id="npCtFrom"></select></label>
+        <label>To <select id="npCtTo"></select></label>
+        <label>&nbsp;<button class="btn ghost" id="npCtExport" type="button">Export (.xlsx)</button></label>
+      </div>
+      <div class="table-scroll" style="padding:0 20px 18px">
+        <table class="grid compact" id="npCtTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden np-panel" id="np-payslip">
+    <div class="card">
+      <div class="card-head">
+        <h2>Non-PH payroll</h2>
+        <p class="hint" style="display:block">
+          Prepare saves the month's payslips from the Payroll Run to TrinityHR as drafts — an XK batch and a
+          No-Tax batch — matched to each account by work email. Publish them in the list below. Preparing again
+          replaces that month's drafts.
+        </p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 8px">
+        <label>Month <select id="npPsMonth"></select></label>
+      </div>
+      <div id="npPsSummary" style="padding:0 20px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding:8px 20px 18px">
+        <button class="btn" id="npPsPrepare" type="button">Prepare payslips</button>
+      </div>
+      <div class="notice warn hidden" id="npPsUnmatched" style="margin:0 20px 18px"></div>
+    </div>
+    <div id="npPsMoved"></div>
+  </section>
+
+  <section class="panel hidden np-panel" id="np-settings">
+    <div class="card">
+      <div class="card-head">
+        <h2>Non-PH rules</h2>
+        <p class="hint" style="display:block">Saved for all admins. Changes apply to months not yet marked paid.</p>
+      </div>
+      <div class="form-grid" style="padding:0 20px 18px" id="npSettingsForm">
+        <label>Pension — employee % <input type="number" step="0.01" data-np-setting="pensionEE"></label>
+        <label>Pension — employer % <input type="number" step="0.01" data-np-setting="pensionER"></label>
+        <label>Tax-free up to (EUR / month) <input type="number" step="0.01" data-np-setting="band1"></label>
+        <label>Second band up to (EUR) <input type="number" step="0.01" data-np-setting="band2"></label>
+        <label>Second band rate % <input type="number" step="0.01" data-np-setting="rate2"></label>
+        <label>Above that % <input type="number" step="0.01" data-np-setting="rate3"></label>
+        <label>Secondary employer — flat % <input type="number" step="0.01" data-np-setting="secondaryRate"></label>
+        <label>Payout day of the month <input type="number" min="1" max="31" data-np-setting="payoutDay"></label>
+        <label>Company on payslip — Kosovo <input type="text" data-np-setting="companyKosovo"></label>
+        <label>Company on payslip — everyone else <input type="text" data-np-setting="companyOther"></label>
+        <label>Company address (optional) <input type="text" data-np-setting="address"></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden np-panel" id="np-process">
+    <div class="card">
+      <div class="card-head"><h2>Non-PH payroll — process</h2></div>
+      <ol style="padding:0 20px 18px 40px;line-height:1.7">
+        <li><strong>Employees</strong>: everyone with a numbered ID (10, 12, 30 …) and no PH rate starts here. Check each
+          person's country (from TrinityHR), rule (XK / No-Tax), currency and monthly rate. Someone on the wrong side?
+          Move them with <em>Move someone from PH to Non-PH</em> here, or <em>Move to PH</em> on their row.</li>
+        <li><strong>Payroll Run</strong>: pick the month, type commission (with details), bonuses, reimbursements and
+          deductions. Joiners and leavers are prorated by working days.</li>
+        <li><strong>Final Pay</strong>: for leavers, tick <em>Pay leave</em> to add unused Annual Leave to their final month.</li>
+        <li><strong>Payslip</strong>: Prepare payslips → check the drafts → Publish. Then <strong>Wise CSV</strong> on the
+          No-Tax batch for the bank transfers.</li>
+        <li>Back on the Payroll Run, <strong>Mark as paid</strong> once the money is sent.</li>
+      </ol>
+    </div>
+  </section>
+
 </main>
 
 <!-- ==================== PAYSLIP MODAL ==================== -->

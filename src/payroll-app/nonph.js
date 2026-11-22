@@ -156,7 +156,7 @@
     var hired = String(emp.dateHired || ''), left = String(emp.endDate || '');
     var staff = wd.filter(function (d) { return !(hired && d < hired) && !(left && d > left); }).length;
     var full = staff === wd.length;
-    var basic = en.gross !== undefined ? num(en.gross) : full ? rate : wd.length ? r2(rate * staff / wd.length) : 0;
+    var basic = en.gross !== undefined ? num(en.gross) : P.isPhPayroll(emp) ? 0 : full ? rate : wd.length ? r2(rate * staff / wd.length) : 0;
     var comm = num(en.commission), bonus = num(en.bonus), leave = num(en.leavePay), reimb = num(en.reimb), ded = num(en.deduction);
     var tg = r2(basic + comm + bonus + leave - ded);
     var x = { emp: emp, rate: rate, country: country, rule: rule, currency: cur, workDays: wd.length, staffDays: staff,
@@ -252,15 +252,26 @@
   }
   /** Blank Non-PH rates and currencies from the newest uploaded month. */
   var filledNotice = [], lastKind = {};
+  /* PH staff (salary through Trinity) whose commission is paid here: in the
+     newest upload with no salary. They stay PH and show on the Non-PH run
+     as commission-only rows. */
+  var commissionOnly = {};
   function fillFromImports() {
     var ids = Object.keys(imp.months).sort(), seen = {}, changed = false;
     ids.reverse().forEach(function (id) {
       imp.months[id].slips.forEach(function (it) {
         var e = matchEmp(it.slip);
-        if (!e || seen[e.id] || P.isPhPayroll(e)) return;
+        if (!e || seen[e.id]) return;
         seen[e.id] = true;
         lastKind[e.id] = it.kind;
         var x = fromSlip(e, it.slip, it.kind, it.batch);
+        if (P.isPhPayroll(e)) {
+          if (!x.basic) {
+            commissionOnly[e.id] = true;
+            if (!np(e).currency && x.currency) { setNp(e, 'currency', x.currency); changed = true; }
+          }
+          return;
+        }
         if (!(num(np(e).rate) > 0) && x.basic > 0) {
           setNp(e, 'rate', x.basic); changed = true;
           filledNotice.push(nameOf(e) + ': ' + plain(x.basic) + ' ' + x.currency + ' (' + it.batch + ')');
@@ -279,15 +290,18 @@
       mo.slips.forEach(function (it) {
         var e = matchEmp(it.slip);
         if (!e) { unmatched.push(it.slip.name || it.slip.email); return; }
-        if (P.isPhPayroll(e)) phSide.push(nameOf(e));
-        rows.push(fromSlip(e, it.slip, it.kind, it.batch));
+        var x = fromSlip(e, it.slip, it.kind, it.batch);
+        if (P.isPhPayroll(e)) { x.commissionOnly = !x.basic; if (x.basic) phSide.push(nameOf(e)); }
+        rows.push(x);
       });
       rows.sort(function (a, b) { return nameOf(a.emp).localeCompare(nameOf(b.emp)); });
       return { rows: rows, noRate: [], imported: mo, unmatched: unmatched, phSide: phSide };
     }
     var on = people().filter(function (e) { return onStaffMonth(e, y, m); });
+    var comm = state.employees.filter(function (e) { return commissionOnly[e.id] && P.isPhPayroll(e) && onStaffMonth(e, y, m); })
+      .map(function (e) { var x = compute(e, y, m); x.commissionOnly = true; return x; });
     return {
-      rows: on.filter(function (e) { return num(np(e).rate) > 0; }).map(function (e) { return compute(e, y, m); })
+      rows: on.filter(function (e) { return num(np(e).rate) > 0; }).map(function (e) { return compute(e, y, m); }).concat(comm)
         .sort(function (a, b) { return nameOf(a.emp).localeCompare(nameOf(b.emp)); }),
       noRate: on.filter(function (e) { return !(num(np(e).rate) > 0); })
     };
@@ -390,7 +404,9 @@
         run.imported.batches.map(function (b) { return esc(b.id) + (b.published ? '' : ' (draft)'); }).join(', ') +
         ' (Payslip tab), as paid; their cells are locked. Only the people in the upload are on this month.' +
         (run.unmatched.length ? '<br>Not on the roster (' + run.unmatched.length + '): ' + esc(run.unmatched.join(', ')) + '.' : '') +
-        (run.phSide.length ? '<br>On the PH side but paid here — move them to Non-PH on the Employees tab? ' + esc(run.phSide.join(', ')) + '.' : '') +
+        (run.rows.some(function (x) { return x.commissionOnly; }) ? '<br>Commission only (salary on the PH payroll): ' +
+          esc(run.rows.filter(function (x) { return x.commissionOnly; }).map(function (x) { return nameOf(x.emp); }).join(', ')) + '.' : '') +
+        (run.phSide.length ? '<br>On the PH side but paid a salary here — move them to Non-PH on the Employees tab? ' + esc(run.phSide.join(', ')) + '.' : '') +
         '</div>';
     }
     if (filledNotice.length) {
@@ -412,7 +428,7 @@
       html += '<div class="notice warn"><strong>No currency</strong> for ' + noCur.map(function (x) { return esc(nameOf(x.emp)); }).join(', ') +
         ' — set it on the Employees tab.</div>';
     }
-    var noCountry = rows.filter(function (x) { return !x.country; });
+    var noCountry = rows.filter(function (x) { return !x.country && !x.commissionOnly; });
     if (noCountry.length && countriesLoaded === true) {
       html += '<div class="notice info"><strong>No country</strong> for ' + noCountry.map(function (x) { return esc(nameOf(x.emp)); }).join(', ') +
         ' — no TrinityHR account with their email. Without one no holidays apply and the rule is No-Tax; set it on the Employees tab.</div>';
@@ -454,7 +470,8 @@
         return '<tr><td class="sticky-col"><strong>' + esc(nameOf(x.emp)) + '</strong> <span class="muted">' + esc(x.emp.id) + '</span></td>' +
           '<td>' + esc(COUNTRY[x.country] || x.country || '—') + '</td>' +
           '<td>' + (x.rule === 'xk' ? 'XK' + (np(x.emp).taxStatus === 'Foreign' ? ' <span class="muted">Foreign</span>' : '') : 'No-Tax') + '</td>' +
-          '<td>' + esc(x.currency || '—') + '</td>' + cell(x.rate) +
+          '<td>' + esc(x.currency || '—') + '</td>' +
+          (x.commissionOnly ? '<td class="num"><span class="muted" title="Salary on the PH payroll">commission only</span></td>' : cell(x.rate)) +
           '<td class="num">' + (x.imported ? '<span class="muted">file</span>' : x.staffDays + '/' + x.workDays) + '</td>' +
           '<td class="num"><input type="text" class="np-in" data-np-entry="' + esc(x.emp.id) + '" data-key="gross" value="' + esc(plain(x.basic)) + '"' +
             ' title="' + (x.prorated ? 'Prorated: ' + x.staffDays + ' of ' + x.workDays + ' working days. ' : '') + 'Type to override; clear to recompute."' + dis + '></td>' +

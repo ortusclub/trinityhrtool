@@ -58,6 +58,28 @@
       </div>
     </div>
 
+    <div class="subtabs" id="runScope" role="tablist" aria-label="Payroll">
+      <button class="subtab active" data-scope="ph" type="button" role="tab">PH <span class="subtab-count" id="runScopePh"></span></button>
+      <button class="subtab" data-scope="nonph" type="button" role="tab">Non-PH <span class="subtab-count" id="runScopeNonPh"></span></button>
+    </div>
+
+    <div id="runNonPh" class="panel hidden">
+      <div class="card">
+        <div class="card-head">
+          <h2>Non-PH staff on this cutoff</h2>
+          <p class="hint" style="display:block">
+            Everyone on the roster at a company other than <strong id="runNonPhOwn"></strong> who is on staff
+            during this cutoff and not on the PH run. Their payslips are uploaded on the
+            <strong>Payslip</strong> tab (No-Tax / XK) and paid through Wise.
+          </p>
+        </div>
+        <div class="table-scroll" style="padding:0 20px 18px">
+          <table class="grid compact" id="runNonPhTable"></table>
+        </div>
+      </div>
+    </div>
+
+    <div id="runPh" class="panel">
     <div class="stat-row" id="statRow"></div>
 
     <div id="rosterNotice"></div>
@@ -209,6 +231,7 @@
           <tfoot id="loanFoot"></tfoot>
         </table>
       </div>
+    </div>
     </div>
   </section>
 

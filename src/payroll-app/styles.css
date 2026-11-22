@@ -554,3 +554,28 @@ th .col-filter {
 }
 th.num .col-filter { margin-left: auto; }
 th .col-filter.on { border-color: var(--accent); background: var(--accent-soft); }
+
+/* ---------------------- PH / Non-PH switch on Payroll Run ---------------------- */
+.subtabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.subtab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 7px 18px;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.subtab:hover { color: var(--text); }
+.subtab.active { background: var(--accent); color: #fff; }
+.subtab-count { font-weight: 400; opacity: .8; margin-left: 2px; }

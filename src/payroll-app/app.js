@@ -424,6 +424,47 @@
     renderRunTable();
     renderEmployerTable();
     renderLoanLedger();
+    renderNonPh();
+  }
+
+  /* ---- Payroll Run: PH / Non-PH tabs ----
+     PH is the run as it always was. Non-PH lists everyone on staff this
+     cutoff at a company other than this payroll's ("Trinity …") who is
+     not in the run. Only a view: nothing here changes the PH figures. */
+  function setRunScope(scope) {
+    var nonph = scope === 'nonph';
+    $$('#runScope .subtab').forEach(function (b) { b.classList.toggle('active', b.dataset.scope === (nonph ? 'nonph' : 'ph')); });
+    $('#runPh').classList.toggle('hidden', nonph);
+    $('#runNonPh').classList.toggle('hidden', !nonph);
+    var acts = document.querySelector('#tab-run .period-actions');
+    if (acts) acts.classList.toggle('hidden', nonph);
+  }
+
+  function renderNonPh() {
+    var own = String(state.settings.company.name || '').trim().split(/\s+/)[0].toLowerCase();
+    var inRun = {};
+    state.runEmployees.forEach(function (e) { inRun[e.id] = true; });
+    var list = state.employees.filter(function (e) {
+      var c = String(e.company || '').trim().toLowerCase();
+      return c && own && c.indexOf(own) === -1 && !inRun[e.id] && onStaff(e, state.period);
+    });
+    var name = function (e) { return (e.lastName || '') + ', ' + (e.firstName || ''); };
+    list.sort(function (a, b) { return name(a).localeCompare(name(b)); });
+    $('#runScopePh').textContent = state.runEmployees.length;
+    $('#runScopeNonPh').textContent = list.length;
+    $('#runNonPhOwn').textContent = state.settings.company.name || 'this payroll';
+    var head = '<thead><tr><th>ID</th><th>Employee</th><th>Company</th><th>Country</th><th>Currency</th>' +
+      '<th class="num">Monthly rate</th><th>Started</th><th>Last day</th><th>Email</th></tr></thead>';
+    $('#runNonPhTable').innerHTML = head + '<tbody>' + (list.length ? list.map(function (e) {
+      var rate = E.num(e.monthlyRate);
+      return '<tr><td>' + esc(e.id) + '</td><td>' + esc(name(e)) + '</td>' +
+        '<td class="muted">' + esc(e.company || '') + '</td><td>' + esc(e.countryRegion || '') + '</td>' +
+        '<td>' + esc(e.currency || '') + '</td>' +
+        '<td class="num">' + (rate ? plain(rate) : '<span class="muted">\u2014</span>') + '</td>' +
+        '<td>' + esc(e.dateHired || '') + '</td><td>' + esc(e.endDate || '') + '</td>' +
+        '<td class="muted">' + esc(e.email || '') + '</td></tr>';
+    }).join('') : '<tr><td colspan="9" class="muted" style="padding:18px">Nobody outside ' +
+      esc(state.settings.company.name || 'this payroll') + ' is on staff this cutoff.</td></tr>') + '</tbody>';
   }
 
   /* On the payroll for a cutoff unless they started after it closed or left
@@ -4303,6 +4344,10 @@
     ['#ctFrom', '#ctTo', '#ctBasis'].forEach(function (s) { $(s).addEventListener('change', renderContrib); });
     $('#ctSearch').addEventListener('input', renderContrib);
     $('#btnCtExport').addEventListener('click', exportContrib);
+    $('#runScope').addEventListener('click', function (ev) {
+      var b = ev.target.closest('.subtab');
+      if (b) setRunScope(b.dataset.scope);
+    });
     $('#tabs').addEventListener('click', function (ev) {
       var t = ev.target.closest('.tab');
       if (t) switchTab(t.dataset.tab);

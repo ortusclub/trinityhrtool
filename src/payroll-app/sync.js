@@ -133,6 +133,12 @@
   function startApp() {
     var s = document.createElement('script');
     s.src = 'app.js';
+    // The Non-PH payroll builds on app.js (window.PayrollApp).
+    s.onload = function () {
+      var n = document.createElement('script');
+      n.src = 'nonph.js';
+      document.body.appendChild(n);
+    };
     document.body.appendChild(s);
   }
 

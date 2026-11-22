@@ -554,3 +554,27 @@ th .col-filter {
 }
 th.num .col-filter { margin-left: auto; }
 th .col-filter.on { border-color: var(--accent); background: var(--accent-soft); }
+
+/* ---------------------- PH / Non-PH switch under the header ---------------------- */
+.scopebar {
+  display: flex;
+  gap: 4px;
+  padding: 10px 24px 0;
+  background: var(--surface);
+}
+.scope {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  padding: 6px 20px;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+.scope:hover { color: var(--text); }
+.scope.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+table.grid input.np-in { width: 92px; text-align: right; }
+table.grid input.np-text { width: 150px; }
+table.grid select.np-sel { max-width: 120px; }

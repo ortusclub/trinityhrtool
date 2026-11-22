@@ -57,6 +57,11 @@ export async function GET(request: Request) {
           salary: ((r.lines as { earnings?: { label?: string; amount?: number | null }[] } | null)?.earnings ?? [])
             .filter((l) => /^(gross )?salary\b/i.test(String(l.label ?? "").trim()))
             .reduce((t, l) => t + (Number(l.amount) || 0), 0),
+          gross_pay: Number(r.gross_pay),
+          total_deductions: Number(r.total_deductions),
+          // Every line, so the Non-PH run can show an uploaded month as paid.
+          earnings: (r.lines as { earnings?: unknown[] } | null)?.earnings ?? [],
+          deductions: (r.lines as { deductions?: unknown[] } | null)?.deductions ?? [],
         };
       }),
     });

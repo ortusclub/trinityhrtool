@@ -69,7 +69,9 @@
   function countryOf(emp) {
     return np(emp).country || accountCountry[String(emp.email || '').trim().toLowerCase()] || '';
   }
-  function ruleOf(emp) { return np(emp).rule || (countryOf(emp) === 'XK' ? 'xk' : 'notax'); }
+  /* Set per person; else as their latest upload was paid (so someone paid
+     No-Tax keeps being paid No-Tax); else Kosovo → XK, anyone else No-Tax. */
+  function ruleOf(emp) { return np(emp).rule || lastKind[emp.id] || (countryOf(emp) === 'XK' ? 'xk' : 'notax'); }
   function currencyOf(emp) {
     if (ruleOf(emp) === 'xk') return 'EUR';
     var c = np(emp).currency;
@@ -172,7 +174,117 @@
     return x;
   }
 
+  /* ---------------- months already paid through an upload ----------------
+     The No-Tax / XK batches on the Payslip tab are the record of what was
+     paid: a month with one shows those payslips, as paid, and only the
+     people in them — like an imported PH cutoff. A blank Non-PH rate or
+     currency is filled from the latest one. */
+  var imp = { loaded: {}, months: {}, error: '' };
+  function batchMonth(b) {
+    var lm = String(b.label || '').match(/^([A-Za-z]+) (\d{4})$/), mi = lm ? MONTHS.indexOf(lm[1]) : -1;
+    if (mi >= 0) return { y: +lm[2], m: mi };
+    var p = String(b.payout_date || '');
+    return /^\d{4}-\d{2}/.test(p) ? { y: +p.slice(0, 4), m: +p.slice(5, 7) - 1 } : null;
+  }
+  var key = function (v) {
+    return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+  };
+  function matchEmp(slip) {
+    var em = String(slip.email || '').trim().toLowerCase(), code = String(slip.code || '').trim(), nk = key(slip.name);
+    var all = state.employees;
+    return all.filter(function (e) { return em && String(e.email || '').trim().toLowerCase() === em; })[0] ||
+      all.filter(function (e) { return code && String(e.id).trim() === code; })[0] ||
+      all.filter(function (e) {
+        return nk && (key((e.firstName || '') + ' ' + (e.lastName || '')) === nk || key((e.preferredName || '') + ' ' + (e.lastName || '')) === nk);
+      })[0] || null;
+  }
+  function fromSlip(emp, slip, kind, batch) {
+    var x = { emp: emp, rate: num(np(emp).rate), country: countryOf(emp), rule: kind, currency: slip.currency || 'EUR',
+      workDays: 0, staffDays: 0, prorated: false, basic: 0, commission: 0, bonus: 0, leavePay: 0, reimb: 0, deduction: 0,
+      ee: 0, er: 0, tax: 0, entry: {}, imported: batch };
+    var bonusDesc = [], commDesc = [], dedDesc = [];
+    (slip.earnings || []).forEach(function (l) {
+      var a = num(l.amount), lab = String(l.label || '');
+      if (l.kind === 'sub') { commDesc.push(lab); return; }
+      if (/^(gross )?salary\b/i.test(lab)) x.basic = r2(x.basic + a);
+      else if (/^commission/i.test(lab)) x.commission = r2(x.commission + a);
+      else if (/reimburse/i.test(lab)) x.reimb = r2(x.reimb + a);
+      else { x.bonus = r2(x.bonus + a); bonusDesc.push(lab.replace(/^Bonus\s*–\s*/, '')); }
+    });
+    (slip.deductions || []).forEach(function (l) {
+      var a = num(l.amount), lab = String(l.label || '');
+      if (/pension/i.test(lab)) x.ee = r2(x.ee + a);
+      else if (/withholding tax/i.test(lab)) x.tax = r2(x.tax + a);
+      else { x.deduction = r2(x.deduction + a); dedDesc.push(lab); }
+    });
+    if (kind === 'xk') x.er = x.ee;
+    x.entry = { commissionDetails: commDesc.join('; '), bonusDesc: bonusDesc.join('; '), deductionDesc: dedDesc.join('; ') };
+    x.totalGross = r2(x.basic + x.commission + x.bonus - x.deduction);
+    x.taxable = r2(x.totalGross - x.ee);
+    x.net = num(slip.net_pay);
+    x.cost = r2(x.totalGross + x.er + x.reimb);
+    return x;
+  }
+  function loadImported(y) {
+    if (imp.loaded[y]) return;
+    imp.loaded[y] = 'loading';
+    P.psApi('payslips').then(function (d) {
+      var bs = (d.batches || []).filter(function (b) {
+        var bm = /^(notax|xk)-/.test(b.id) ? batchMonth(b) : null;
+        return bm && bm.y === y;
+      });
+      return Promise.all(bs.map(function (b) {
+        return P.psApi('payslips?batch=' + encodeURIComponent(b.id)).then(function (r) { return { b: b, r: r }; });
+      }));
+    }).then(function (list) {
+      Object.keys(imp.months).forEach(function (k) { if (k.indexOf('NP-' + y + '-') === 0) delete imp.months[k]; });
+      list.forEach(function (it) {
+        var bm = batchMonth(it.b), id = monthId(bm.y, bm.m), kind = it.b.id.indexOf('xk-') === 0 ? 'xk' : 'notax';
+        var mo = imp.months[id] = imp.months[id] || { batches: [], slips: [], payout: it.b.payout_date };
+        mo.batches.push({ id: it.b.id, published: !!it.b.published_at, count: it.r.payslips.length });
+        (it.r.payslips || []).forEach(function (sl) { mo.slips.push({ slip: sl, kind: kind, batch: it.b.id }); });
+      });
+      imp.loaded[y] = true;
+      imp.error = '';
+      fillFromImports();
+      render();
+    }, function (e) { imp.loaded[y] = false; imp.error = e.message; render(); });
+  }
+  /** Blank Non-PH rates and currencies from the newest uploaded month. */
+  var filledNotice = [], lastKind = {};
+  function fillFromImports() {
+    var ids = Object.keys(imp.months).sort(), seen = {}, changed = false;
+    ids.reverse().forEach(function (id) {
+      imp.months[id].slips.forEach(function (it) {
+        var e = matchEmp(it.slip);
+        if (!e || seen[e.id] || P.isPhPayroll(e)) return;
+        seen[e.id] = true;
+        lastKind[e.id] = it.kind;
+        var x = fromSlip(e, it.slip, it.kind, it.batch);
+        if (!(num(np(e).rate) > 0) && x.basic > 0) {
+          setNp(e, 'rate', x.basic); changed = true;
+          filledNotice.push(nameOf(e) + ': ' + plain(x.basic) + ' ' + x.currency + ' (' + it.batch + ')');
+        }
+        if (!np(e).currency && x.currency && it.kind !== 'xk') { setNp(e, 'currency', x.currency); changed = true; }
+      });
+    });
+    if (changed) saveEmps();
+  }
+  function importedMonth(y, m) { return imp.months[monthId(y, m)] || null; }
+
   function runFor(y, m) {
+    var mo = importedMonth(y, m);
+    if (mo) {
+      var rows = [], unmatched = [], phSide = [];
+      mo.slips.forEach(function (it) {
+        var e = matchEmp(it.slip);
+        if (!e) { unmatched.push(it.slip.name || it.slip.email); return; }
+        if (P.isPhPayroll(e)) phSide.push(nameOf(e));
+        rows.push(fromSlip(e, it.slip, it.kind, it.batch));
+      });
+      rows.sort(function (a, b) { return nameOf(a.emp).localeCompare(nameOf(b.emp)); });
+      return { rows: rows, noRate: [], imported: mo, unmatched: unmatched, phSide: phSide };
+    }
     var on = people().filter(function (e) { return onStaffMonth(e, y, m); });
     return {
       rows: on.filter(function (e) { return num(np(e).rate) > 0; }).map(function (e) { return compute(e, y, m); })
@@ -232,6 +344,7 @@
     if (scope !== 'nonph') return;
     loadCountries();
     syncHolidays(view.year);
+    loadImported(view.year);
     ({ run: renderRun, finalpay: renderFinal, employees: renderEmployees, holidays: renderHolidays,
        contrib: renderContrib, payslip: renderPayslip, settings: renderSettings, process: function () {} })[view.tab]();
   }
@@ -248,12 +361,15 @@
   }
 
   function renderRun() {
-    var y = view.year, m = view.month, run = runFor(y, m), paid = isPaid(y, m), payout = payoutOf(y, m);
+    var y = view.year, m = view.month, run = runFor(y, m), paid = isPaid(y, m) || !!run.imported;
+    var payout = run.imported ? run.imported.payout : payoutOf(y, m);
     fillMonthSelect($('#npMonth'), m);
     var r = monthRange(y, m);
     $('#npMeta').innerHTML = esc(MONTHS[m] + ' ' + y) + ' &middot; Payout <strong>' + esc(P.psDay(payout)) + '</strong> &middot; ' +
       run.rows.length + ' on the run &nbsp; ' +
-      (paid
+      (run.imported
+        ? '<span class="pill processed">Imported — paid</span>'
+        : paid
         ? '<span class="pill processed">Paid ' + esc(cfg().paid[monthId(y, m)]) + '</span> <button class="btn ghost tiny" data-np-paid="undo" type="button">Undo</button>'
         : '<span class="muted">Not processed</span> <button class="btn tiny" data-np-paid="mark" type="button">Mark as paid</button>');
     var rows = run.rows, xk = rows.filter(function (x) { return x.rule === 'xk'; });
@@ -267,6 +383,20 @@
       stat('Cost to company', byCurrency(rows, 'cost'), 'gross + employer pension + reimbursements');
 
     var html = '';
+    if (imp.loaded[y] === 'loading') html += '<p class="hint" style="margin:0 0 12px">Reading the uploaded No-Tax / XK payslips…</p>';
+    if (imp.error) html += '<div class="notice warn">Could not read the uploaded payslips (' + esc(imp.error) + ').</div>';
+    if (run.imported) {
+      html += '<div class="notice info"><strong>Imported payroll.</strong> ' + run.rows.length + ' payslip(s) from ' +
+        run.imported.batches.map(function (b) { return esc(b.id) + (b.published ? '' : ' (draft)'); }).join(', ') +
+        ' (Payslip tab), as paid; their cells are locked. Only the people in the upload are on this month.' +
+        (run.unmatched.length ? '<br>Not on the roster (' + run.unmatched.length + '): ' + esc(run.unmatched.join(', ')) + '.' : '') +
+        (run.phSide.length ? '<br>On the PH side but paid here — move them to Non-PH on the Employees tab? ' + esc(run.phSide.join(', ')) + '.' : '') +
+        '</div>';
+    }
+    if (filledNotice.length) {
+      html += '<div class="notice info note-card"><strong>' + filledNotice.length + ' monthly rate(s) filled</strong> from the latest uploaded ' +
+        'payslip\'s gross salary (they were blank).<ul>' + filledNotice.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul></div>';
+    }
     if (run.noRate.length) {
       html += '<div class="notice warn"><strong>' + run.noRate.length + ' employee' + (run.noRate.length === 1 ? ' has' : 's have') +
         ' no monthly rate</strong> and ' + (run.noRate.length === 1 ? 'is' : 'are') + ' left off this month. Type it on the ' +
@@ -307,10 +437,11 @@
     $('#npNotice').innerHTML = html;
 
     var dis = paid ? ' disabled' : '';
+    var FIELD = { commission: 'commission', bonus: 'bonus', reimb: 'reimb', deduction: 'deduction' };
     var inp = function (x, key, text) {
-      var v = x.entry[key];
+      var v = x.imported && FIELD[key] ? x[FIELD[key]] : x.entry[key];
       return '<td' + (text ? '' : ' class="num"') + '><input type="text" class="' + (text ? 'np-text' : 'np-in') + '" data-np-entry="' + esc(x.emp.id) +
-        '" data-key="' + key + '" value="' + esc(text ? (v || '') : (v ? plain(num(v)) : '')) + '"' + dis + '></td>';
+        '" data-key="' + key + '" value="' + esc(text ? (v || '') : (v ? plain(num(v)) : '')) + '"' + (dis || (x.imported ? ' disabled' : '')) + '></td>';
     };
     var cell = function (v) { return '<td class="num' + (v ? '' : ' zero') + '">' + plain(v) + '</td>'; };
     $('#npRunTable').innerHTML =
@@ -324,7 +455,7 @@
           '<td>' + esc(COUNTRY[x.country] || x.country || '—') + '</td>' +
           '<td>' + (x.rule === 'xk' ? 'XK' + (np(x.emp).taxStatus === 'Foreign' ? ' <span class="muted">Foreign</span>' : '') : 'No-Tax') + '</td>' +
           '<td>' + esc(x.currency || '—') + '</td>' + cell(x.rate) +
-          '<td class="num">' + x.staffDays + '/' + x.workDays + '</td>' +
+          '<td class="num">' + (x.imported ? '<span class="muted">file</span>' : x.staffDays + '/' + x.workDays) + '</td>' +
           '<td class="num"><input type="text" class="np-in" data-np-entry="' + esc(x.emp.id) + '" data-key="gross" value="' + esc(plain(x.basic)) + '"' +
             ' title="' + (x.prorated ? 'Prorated: ' + x.staffDays + ' of ' + x.workDays + ' working days. ' : '') + 'Type to override; clear to recompute."' + dis + '></td>' +
           inp(x, 'commission') + inp(x, 'commissionDetails', true) + inp(x, 'bonus') + inp(x, 'bonusDesc', true) +
@@ -419,7 +550,7 @@
           '<td><select class="np-sel" data-np-emp="' + id + '" data-key="country">' +
             opt('', acct ? 'TrinityHR: ' + (COUNTRY[acct] || acct) : 'No account', n.country || '') +
             Object.keys(COUNTRY).map(function (k) { return opt(k, COUNTRY[k], n.country || ''); }).join('') + '</select></td>' +
-          '<td><select class="np-sel" data-np-emp="' + id + '" data-key="rule">' + opt('', 'Auto (' + (countryOf(e) === 'XK' ? 'XK' : 'No-Tax') + ')', n.rule || '') +
+          '<td><select class="np-sel" data-np-emp="' + id + '" data-key="rule">' + opt('', 'Auto (' + (ruleOf(Object.assign({}, e, { np: {} })) === 'xk' ? 'XK' : 'No-Tax') + (lastKind[e.id] ? ', as last paid' : '') + ')', n.rule || '') +
             opt('xk', 'XK', n.rule || '') + opt('notax', 'No-Tax', n.rule || '') + '</select></td>' +
           '<td>' + (xk ? '<select class="np-sel" data-np-emp="' + id + '" data-key="taxStatus">' + opt('', 'Local', n.taxStatus || '') +
             opt('Foreign', 'Foreign', n.taxStatus || '') + '</select>' : '<span class="muted">—</span>') + '</td>' +
@@ -528,10 +659,12 @@
     if (psMonth === null) psMonth = view.month;
     fillMonthSelect($('#npPsMonth'), psMonth);
     var run = runFor(view.year, psMonth), xk = run.rows.filter(function (x) { return x.rule === 'xk'; });
-    var noEmail = run.rows.filter(function (x) { return !x.emp.email; });
+    var noEmail = run.imported ? [] : run.rows.filter(function (x) { return !x.emp.email; });
     $('#npPsSummary').innerHTML = '<p style="margin:4px 0;font-size:13px">' + esc(MONTHS[psMonth] + ' ' + view.year) + ' · payout ' +
       esc(P.psDay(payoutOf(view.year, psMonth))) + ' · ' + xk.length + ' XK and ' + (run.rows.length - xk.length) + ' No-Tax payslip(s)' +
-      (noEmail.length ? ' · <span style="color:var(--amber)">' + noEmail.length + ' without an email will be skipped</span>' : '') + '</p>';
+      (noEmail.length ? ' · <span style="color:var(--amber)">' + noEmail.length + ' without an email will be skipped</span>' : '') + '</p>' +
+      (run.imported ? '<div class="notice info">Already uploaded: ' + run.imported.batches.map(function (b) { return esc(b.id); }).join(', ') +
+        '. Its payslips are in the list below.</div>' : '');
   }
 
   /** The month's run as the XK / No-Tax template rows, so the payslips read exactly like uploaded ones. */
@@ -567,6 +700,11 @@
 
   function preparePayslips() {
     var y = view.year, m = psMonth, run = runFor(y, m), c = cfg(), btn = $('#npPsPrepare');
+    if (run.imported) {
+      alert(MONTHS[m] + ' ' + y + ' was already uploaded (' + run.imported.batches.map(function (b) { return b.id; }).join(', ') +
+        '). Replace it from the Upload card below, or delete that batch first.');
+      return;
+    }
     var noCur = run.rows.filter(function (x) { return !x.currency; });
     if (noCur.length) {
       alert('Set a currency first (Non-PH Employees tab) for: ' + noCur.map(function (x) { return nameOf(x.emp); }).join(', ') + '.');

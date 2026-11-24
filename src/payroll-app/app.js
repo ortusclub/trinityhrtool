@@ -2549,6 +2549,7 @@
 
   function renderEmployees() {
     loadLiveLeave();
+    renderDirSalary();
     if (!state.employees.length) {
       $('#empBody').innerHTML = '<tr><td colspan="17" class="muted" style="padding:18px">' +
         'No employees yet. Import the 201 File to load the roster.</td></tr>';
@@ -2576,7 +2577,7 @@
           '<option value="manager"' + (emp.employmentClass === 'manager' ? ' selected' : '') + '>Manager (exempt)</option>' +
         '</select></td>' +
         '<td class="num"><input type="text" inputmode="decimal" data-emp-idx="' + i + '" data-key="monthlyRate" value="' + esc(plain(emp.monthlyRate)) + '"' +
-          (E.num(emp.monthlyRate) ? '' : ' class="missing" title="No rate — import salaries"') +
+          (E.num(emp.monthlyRate) ? dirRateAttr(emp) : ' class="missing" title="No rate — import salaries"') +
           ' style="width:110px;text-align:right"></td>' +
         '<td class="num">' + plain(E.r2(r.daily)) + '</td>' +
         '<td class="num">' + plain(E.r2(r.hourly)) + '</td>' +
@@ -3309,6 +3310,133 @@
     }).catch(function (e) {
       liveLeave.loading = false; liveLeave.error = e.message; liveLeave.byEmail = {};
       renderYearEnd(); renderFinalPay(); renderEmployees(); renderRun();
+    });
+  }
+
+
+  /* TEAM DIRECTORY SALARY — the reference for payroll rates (Japheth,
+     24 Nov 2026). Each person's "Current Salary" entries (amount, currency,
+     effective date) come from TrinityHR, matched by email. For PH payroll
+     the newest PHP entry (by effective date) is the rate; one that differs
+     from payroll's is shown on the Employees tab and applied as a salary
+     adjustment from its effective date, so the usual split by working days
+     and back pay follow. Nothing changes until an admin applies it. */
+  var dirSalary = { byEmail: null, loading: false, error: '', field: null };
+  function loadDirSalary() {
+    if (dirSalary.byEmail || dirSalary.loading) return;
+    dirSalary.loading = true;
+    psApi('directory-salaries').then(function (data) {
+      dirSalary.byEmail = {};
+      dirSalary.field = data.field;
+      (data.salaries || []).forEach(function (x) { dirSalary.byEmail[x.email] = x.entries || []; });
+      dirSalary.loading = false;
+      renderEmployees();
+    }).catch(function (e) {
+      dirSalary.loading = false; dirSalary.error = e.message; dirSalary.byEmail = {};
+      renderEmployees();
+    });
+  }
+  /** The Directory's salary for a PH payroll employee: the newest PHP (or
+   *  currency-less) entry by effective date, undated entries counting as
+   *  older than any dated one. null = nothing usable. */
+  function dirSalaryFor(emp) {
+    if (!dirSalary.byEmail) return null;
+    var all = dirSalary.byEmail[String(emp.email || '').trim().toLowerCase()] || [];
+    var php = all.filter(function (x) { return !x.currency || x.currency === 'PHP'; });
+    if (!php.length) return all.length ? { otherCurrency: all[0].currency } : null;
+    php.sort(function (a, b) {
+      var ka = a.effective || '', kb = b.effective || '';
+      return ka === kb ? String(a.updatedAt).localeCompare(String(b.updatedAt)) : ka.localeCompare(kb);
+    });
+    return php[php.length - 1];
+  }
+  /** The rate cell's hint when the Directory differs. */
+  function dirRateAttr(emp) {
+    var d = dirSalaryFor(emp);
+    if (!d || d.otherCurrency !== undefined || Math.abs(d.amount - payrollTargetRate(emp)) < 0.005) return '';
+    return ' class="missing" title="Team Directory: ' + esc(plain(d.amount)) + (d.effective ? ' from ' + esc(d.effective) : '') + ' \u2014 apply it above"';
+  }
+  /** What payroll will pay once any pending raise is in force. */
+  function payrollTargetRate(emp) {
+    var adj = E.num(emp.salaryAdjustment);
+    return E.r2(E.num(emp.monthlyRate) + (/^\d{4}-\d{2}-\d{2}$/.test(String(emp.salaryAdjustmentEffective || '')) ? adj : 0));
+  }
+  /** PH payroll people whose Directory salary differs from payroll's. */
+  function dirSalaryDiffs() {
+    var out = [];
+    state.employees.forEach(function (emp) {
+      if (!isPhPayroll(emp) || !emp.email) return;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(emp.endDate || '')) && emp.endDate < state.period.start) return;
+      var d = dirSalaryFor(emp);
+      if (!d || d.otherCurrency !== undefined) return;
+      var target = payrollTargetRate(emp);
+      if (Math.abs(d.amount - target) < 0.005) return;
+      var eff = d.effective, bp = null;
+      if (eff && eff < state.period.start && E.num(emp.monthlyRate) > 0) {
+        bp = E.backPayFor(emp, eff, E.num(emp.monthlyRate), d.amount, state.period, state.settings);
+      }
+      out.push({ emp: emp, d: d, from: target, eff: eff, backPay: bp });
+    });
+    return out;
+  }
+  /** Apply one Directory salary: from its effective date, or (undated) from
+   *  the cutoff on the Payroll Run, without back pay. */
+  function applyDirSalary(emp, d) {
+    var eff = d.effective || state.period.start;
+    if (!(E.num(emp.monthlyRate) > 0)) {
+      emp.monthlyRate = d.amount; emp.salaryAdjustment = 0; emp.salaryAdjustmentEffective = null;
+    } else {
+      emp.salaryAdjustment = E.r2(d.amount - E.num(emp.monthlyRate));
+      emp.salaryAdjustmentEffective = emp.salaryAdjustment ? eff : null;
+    }
+  }
+  function renderDirSalary() {
+    var box = document.getElementById('dirSalary');
+    if (!box) return;
+    loadDirSalary();
+    if (dirSalary.loading) { box.innerHTML = '<div class="notice">Reading salaries from the Team Directory…</div>'; return; }
+    if (dirSalary.error) { box.innerHTML = '<div class="notice warn">Could not read the Team Directory salaries (' + esc(dirSalary.error) + ').</div>'; return; }
+    if (!dirSalary.field) { box.innerHTML = '<div class="notice warn">The Team Directory has no "Current Salary" field.</div>'; return; }
+    var diffs = dirSalaryDiffs();
+    var cutoff = window.PayrollTemplate.cutoffTitle(state.period);
+    var missing = state.employees.filter(function (emp) {
+      return isPhPayroll(emp) && E.num(emp.monthlyRate) > 0 && !(/^\d{4}-\d{2}-\d{2}$/.test(String(emp.endDate || '')) && emp.endDate < state.period.start) &&
+        !dirSalaryFor(emp);
+    });
+    var head = '<strong>Salaries from the Team Directory</strong> <span class="muted" style="font-size:12.5px">— the reference for the rates below. ' +
+      'The newest PHP "Current Salary" entry by effective date counts. Checked against the cutoff on Payroll Run (' + esc(cutoff) + ').</span>';
+    if (!diffs.length) {
+      box.innerHTML = '<div class="notice">' + head + '<div style="margin-top:6px">Every rate matches the Team Directory' +
+        (missing.length ? ' (' + missing.length + ' on payroll have no salary there: ' + esc(missing.slice(0, 8).map(function (e) { return e.lastName + ', ' + e.firstName; }).join('; ')) +
+          (missing.length > 8 ? '…' : '') + ')' : '') + '.</div></div>';
+      return;
+    }
+    var rows = diffs.map(function (x, i) {
+      var e = x.emp, d = x.d;
+      var when = d.effective ? 'from ' + esc(E.fmtShort(E.parseYmd(d.effective))) + ' ' + d.effective.slice(0, 4)
+        : '<span style="color:var(--red)">no effective date</span> — applies from this cutoff, no back pay';
+      var notes = [];
+      if (x.backPay && x.backPay.amount) notes.push('back pay ' + plain(x.backPay.amount) + ' on this cutoff');
+      if (d.amount < x.from) notes.push('<span style="color:var(--red)">lower than payroll</span>');
+      if (d.selfEdited) notes.push('<span style="color:var(--red)">last saved by the employee themself — check it</span>');
+      return '<tr><td>' + esc(e.lastName + ', ' + e.firstName) + '<div class="muted" style="font-size:11.5px">' + esc(e.id) + '</div></td>' +
+        '<td class="num">' + plain(x.from) + '</td><td class="num strong">' + plain(d.amount) + '</td>' +
+        '<td>' + when + (notes.length ? '<div class="auto-note">' + notes.join(' · ') + '</div>' : '') + '</td>' +
+        '<td><button class="btn tiny" data-dirsal-apply="' + i + '" type="button">Apply</button></td></tr>';
+    }).join('');
+    box.innerHTML = '<div class="notice warn">' + head +
+      '<div style="margin:6px 0">' + diffs.length + ' rate' + (diffs.length === 1 ? ' differs' : 's differ') + ' from the Team Directory. ' +
+      'Applying one sets it as a salary change from its effective date: a date inside the cutoff splits it by working days, an earlier date adds back pay.</div>' +
+      '<table class="grid" style="width:auto"><thead><tr><th>Employee</th><th class="num">Payroll</th><th class="num">Team Directory</th><th>Effective</th><th></th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table>' +
+      '<div style="margin-top:8px"><button class="btn" data-dirsal-apply="all" type="button">Apply all ' + diffs.length + '</button></div></div>';
+    box.querySelectorAll('[data-dirsal-apply]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var pick = this.dataset.dirsalApply === 'all' ? diffs : [diffs[+this.dataset.dirsalApply]];
+        pick.forEach(function (x) { applyDirSalary(x.emp, x.d); });
+        persist();
+        renderEmployees(); renderRun();
+      });
     });
   }
 

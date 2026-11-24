@@ -730,10 +730,17 @@ export function UserManagement({
                         <select
                           value={editForm.holiday_country ?? "PH"}
                           onChange={(e) =>
-                            setEditForm({
-                              ...editForm,
-                              holiday_country: e.target.value as HolidayCountry,
-                            })
+                            {
+                              const next = e.target.value as HolidayCountry;
+                              const prevDefault = COUNTRY_DEFAULTS[(editForm.holiday_country ?? "PH") as HolidayCountry]?.timezone;
+                              // Only move the timezone if it was still the old country's default.
+                              const followTz = !editForm.timezone || editForm.timezone === prevDefault;
+                              setEditForm({
+                                ...editForm,
+                                holiday_country: next,
+                                ...(followTz && { timezone: COUNTRY_DEFAULTS[next].timezone }),
+                              });
+                            }
                           }
                           className="rounded border px-2 py-1 text-sm"
                         >
@@ -1056,6 +1063,28 @@ interface DaySchedule {
 
 const DEFAULT_DAY: DaySchedule = { work_location: "office", start_time: "09:00", end_time: "18:00", is_rest_day: false };
 
+// What picking a country pre-fills on a new user, taken from how existing
+// active staff in that country are set up. Only fields the admin hasn't
+// touched by hand are filled.
+const COUNTRY_DEFAULTS: Record<
+  HolidayCountry,
+  {
+    timezone: string;
+    employment_type?: EmploymentType;
+    overtime_eligible?: boolean;
+    hours?: { start_time: string; end_time: string };
+  }
+> = {
+  PH: { timezone: "Asia/Manila", employment_type: "employee", overtime_eligible: true, hours: { start_time: "10:00", end_time: "19:00" } },
+  XK: { timezone: "Europe/Berlin", employment_type: "consultant", overtime_eligible: false, hours: { start_time: "09:00", end_time: "18:00" } },
+  IT: { timezone: "Europe/Berlin", employment_type: "consultant", overtime_eligible: false, hours: { start_time: "09:00", end_time: "18:00" } },
+  AE: { timezone: "Asia/Dubai" },
+  US: { timezone: "America/New_York" },
+  KR: { timezone: "Asia/Seoul" },
+};
+
+type CountryDefaultField = "timezone" | "employment_type" | "overtime_eligible" | "hours";
+
 function AddUserModal({
   users,
   roleOptions,
@@ -1074,8 +1103,8 @@ function AddUserModal({
     last_name: "",
     email: "",
     role: "employee" as UserRole,
-    company: "" as Company | "",
-    employment_type: "employee" as EmploymentType,
+    company: "Ortus Strategy Pte. Ltd." as Company | "",
+    employment_type: COUNTRY_DEFAULTS.PH.employment_type as EmploymentType,
     department: "",
     job_title: "",
     manager_id: "",
@@ -1088,16 +1117,35 @@ function AddUserModal({
     regularization_date: "",
     end_date: "",
     is_active: true,
-    overtime_eligible: false,
+    overtime_eligible: COUNTRY_DEFAULTS.PH.overtime_eligible as boolean,
   });
   const [includeSchedule, setIncludeSchedule] = useState(false);
   const [days, setDays] = useState<DaySchedule[]>(
-    WEEKDAYS.map(() => ({ ...DEFAULT_DAY }))
+    WEEKDAYS.map(() => ({ ...DEFAULT_DAY, ...COUNTRY_DEFAULTS.PH.hours }))
   );
+  // Fields the admin changed by hand; picking a country won't overwrite them.
+  const [touched, setTouched] = useState<Set<CountryDefaultField>>(new Set());
+  const touch = (f: CountryDefaultField) =>
+    setTouched((prev) => (prev.has(f) ? prev : new Set(prev).add(f)));
+
+  const changeCountry = (country: HolidayCountry) => {
+    const d = COUNTRY_DEFAULTS[country];
+    setForm((prev) => ({
+      ...prev,
+      holiday_country: country,
+      ...(!touched.has("timezone") && { timezone: d.timezone }),
+      ...(!touched.has("employment_type") && d.employment_type && { employment_type: d.employment_type }),
+      ...(!touched.has("overtime_eligible") && d.overtime_eligible !== undefined && { overtime_eligible: d.overtime_eligible }),
+    }));
+    if (!touched.has("hours") && d.hours) {
+      setDays((prev) => prev.map((day) => ({ ...day, ...d.hours })));
+    }
+  };
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const updateDay = (idx: number, updates: Partial<DaySchedule>) => {
+    if ("start_time" in updates || "end_time" in updates) touch("hours");
     setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...updates } : d)));
   };
 
@@ -1217,7 +1265,7 @@ function AddUserModal({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Employment Type</label>
-              <select value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value as EmploymentType })} className={inputClass}>
+              <select value={form.employment_type} onChange={(e) => { touch("employment_type"); setForm({ ...form, employment_type: e.target.value as EmploymentType }); }} className={inputClass}>
                 <option value="employee">Employee</option>
                 <option value="consultant">Consultant</option>
               </select>
@@ -1244,11 +1292,12 @@ function AddUserModal({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Country</label>
-              <select value={form.holiday_country} onChange={(e) => setForm({ ...form, holiday_country: e.target.value as HolidayCountry })} className={inputClass}>
+              <select value={form.holiday_country} onChange={(e) => changeCountry(e.target.value as HolidayCountry)} className={inputClass}>
                 {COUNTRY_OPTIONS.map((c) => (
                   <option key={c} value={c}>{HOLIDAY_COUNTRY_LABELS[c]}</option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-gray-400">Sets timezone, employment type, overtime and hours to the usual for this country.</p>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">DeskTime ID</label>
@@ -1260,7 +1309,7 @@ function AddUserModal({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Timezone</label>
-              <select value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} className={inputClass}>
+              <select value={form.timezone} onChange={(e) => { touch("timezone"); setForm({ ...form, timezone: e.target.value }); }} className={inputClass}>
                 {TIMEZONE_OPTIONS.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
@@ -1299,7 +1348,7 @@ function AddUserModal({
               <input
                 type="checkbox"
                 checked={form.overtime_eligible}
-                onChange={(e) => setForm({ ...form, overtime_eligible: e.target.checked })}
+                onChange={(e) => { touch("overtime_eligible"); setForm({ ...form, overtime_eligible: e.target.checked }); }}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="text-sm font-medium text-gray-700">Overtime Eligible</span>

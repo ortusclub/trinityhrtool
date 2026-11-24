@@ -235,6 +235,8 @@ export interface ProfileField {
   visibility: ProfileFieldVisibility;
   /** If true, hr_support can see values of this field too. */
   visible_to_recruiter: boolean;
+  /** Only hr_admin / super_admin can write values (e.g. Current Salary). */
+  admin_edit_only?: boolean;
   sort_order: number;
   /** Non-null for fields that map to a column on the users table. */
   built_in_key: string | null;

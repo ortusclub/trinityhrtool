@@ -46,7 +46,10 @@ const WORKED_STATUSES = [
  */
 export async function computeNightDifferentialSchedules(
   admin: SupabaseClient,
-  filters: FilterValues = {}
+  filters: FilterValues = {},
+  /** Payroll (Japheth, 24 Nov 2026): a schedule adjustment that is not
+   *  rejected — pending or approved — overrides the day's scheduled times. */
+  opts: { pendingAdjustments?: boolean } = {}
 ): Promise<NightDiffPeriodRow[]> {
   const today = new Date().toISOString().slice(0, 10);
   const dr =
@@ -66,12 +69,39 @@ export async function computeNightDifferentialSchedules(
       .select("employee_id, date, scheduled_start, scheduled_end")
       .gte("date", from)
       .lte("date", to)
-      .not("scheduled_start", "is", null)
       .in("status", WORKED_STATUSES)
       .range(off, off + PAGE - 1);
     if (error) throw new Error(`attendance_logs: ${error.message}`);
     logs.push(...(data ?? []));
     if (!data || data.length < PAGE) break;
+  }
+
+  // Schedule adjustments filed for the period and not rejected: the latest
+  // one for a day replaces that day's scheduled times.
+  const adj = new Map<string, { start: string; end: string; at: string }>();
+  if (opts.pendingAdjustments) {
+    for (let off = 0; ; off += PAGE) {
+      const { data, error } = await admin
+        .from("schedule_adjustments")
+        .select("employee_id, requested_date, requested_start_time, requested_end_time, created_at")
+        .in("status", ["pending", "approved"])
+        .gte("requested_date", from)
+        .lte("requested_date", to)
+        .range(off, off + PAGE - 1);
+      if (error) throw new Error(`schedule_adjustments: ${error.message}`);
+      for (const a of data ?? []) {
+        const k = `${a.employee_id}|${a.requested_date}`;
+        const prev = adj.get(k);
+        if (!prev || String(a.created_at) > prev.at) {
+          adj.set(k, { start: a.requested_start_time, end: a.requested_end_time, at: String(a.created_at) });
+        }
+      }
+      if (!data || data.length < PAGE) break;
+    }
+  }
+  for (const l of logs) {
+    const a = adj.get(`${l.employee_id}|${l.date}`);
+    if (a) { l.scheduled_start = a.start; l.scheduled_end = a.end; }
   }
 
   type Acc = {
@@ -81,6 +111,7 @@ export async function computeNightDifferentialSchedules(
   };
   const byEmp = new Map<string, Acc>();
   for (const l of logs) {
+    if (!l.scheduled_start || !l.scheduled_end) continue;
     const nd = nightDifferentialHours(l.scheduled_start, l.scheduled_end);
     if (nd <= 0) continue;
     const acc =

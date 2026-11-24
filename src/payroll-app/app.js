@@ -154,7 +154,7 @@
   }
 
   /* OT and ND hours from TrinityHR, straight into the cutoff's timesheet.
-     Approved overtime requests go by the day they were worked: a workday
+     Overtime requests approved or still pending (rejected never) go by the day they were worked: a workday
      into OT 1.25, a rest day or special non-working day into OT 1.69, a
      regular holiday into OT 2.60. ND HRS is the night part of scheduled
      shifts worked plus of the overtime. Read once per cutoff a session.
@@ -185,7 +185,7 @@
       var put = function (f, hrs, why) {
         if (!hrs) return;
         out[f] += hrs;
-        out.detail[f].push(label + E.r2(hrs) + 'h — ' + why);
+        out.detail[f].push(label + E.r2(hrs) + 'h — ' + why + (o.pending ? ' (pending approval)' : ''));
       };
       if (h && h.type === 'regular') put('otRegHolidayHours', o.hours, h.name);
       else if (off) {
@@ -198,7 +198,7 @@
       else put('otHours', o.hours, 'workday');
       if (o.ndHours) {
         out.ndHours += o.ndHours;
-        out.detail.ndHours.push(o.ndHours + 'h of overtime on ' + E.fmtShort(day));
+        out.detail.ndHours.push(o.ndHours + 'h of overtime on ' + E.fmtShort(day) + (o.pending ? ' (pending approval)' : ''));
       }
     });
     OTND_FIELDS.forEach(function (f) { out[f] = out[f] ? E.r2(out[f]) : null; });

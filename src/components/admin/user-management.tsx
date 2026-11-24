@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Pencil, Save, X, Calendar, Trash2, Plus, KeyRound, Palmtree, Download, UserCog } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, addMonths, parseISO, format, isValid } from "date-fns";
 import { EmployeeLeaveTypesModal } from "./employee-leave-types";
 import type { User, UserRole, HolidayCountry, Company, EmploymentType } from "@/types/database";
 import { HOLIDAY_COUNTRY_LABELS, COMPANY_OPTIONS } from "@/types/database";
@@ -867,12 +867,18 @@ export function UserManagement({
                         <input
                           type="date"
                           value={editForm.hire_date ?? ""}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const hire = e.target.value || null;
+                            // Move regularization along only if it was blank or
+                            // still the 6-month default for the old hire date.
+                            const reg = editForm.regularization_date;
+                            const follow = !reg || reg === sixMonthsAfter(editForm.hire_date);
                             setEditForm({
                               ...editForm,
-                              hire_date: e.target.value || null,
-                            })
-                          }
+                              hire_date: hire,
+                              ...(follow && { regularization_date: sixMonthsAfter(hire) || null }),
+                            });
+                          }}
                           className="rounded border px-2 py-1 text-sm"
                         />
                       ) : (
@@ -1083,7 +1089,14 @@ const COUNTRY_DEFAULTS: Record<
   KR: { timezone: "Asia/Seoul" },
 };
 
-type CountryDefaultField = "timezone" | "employment_type" | "overtime_eligible" | "hours";
+type CountryDefaultField = "timezone" | "employment_type" | "overtime_eligible" | "hours" | "regularization_date";
+
+// Usual regularization date: 6 months after hire (Aug 31 -> Feb 28/29).
+function sixMonthsAfter(date: string | null | undefined): string {
+  if (!date) return "";
+  const d = parseISO(date);
+  return isValid(d) ? format(addMonths(d, 6), "yyyy-MM-dd") : "";
+}
 
 function AddUserModal({
   users,
@@ -1321,11 +1334,40 @@ function AddUserModal({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Hire Date</label>
-              <input type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })} className={inputClass} />
+              <input
+                type="date"
+                value={form.hire_date}
+                onChange={(e) => {
+                  const hire = e.target.value;
+                  setForm((prev) => ({
+                    ...prev,
+                    hire_date: hire,
+                    ...(!touched.has("regularization_date") && { regularization_date: sixMonthsAfter(hire) }),
+                  }));
+                }}
+                className={inputClass}
+              />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Regularization Date</label>
-              <input type="date" value={form.regularization_date} onChange={(e) => setForm({ ...form, regularization_date: e.target.value })} className={inputClass} />
+              <input
+                type="date"
+                value={form.regularization_date}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  // Any edit pins it; clearing leaves it blank but lets a later
+                  // hire-date change fill it again.
+                  setTouched((prev) => {
+                    const next = new Set(prev);
+                    if (v) next.add("regularization_date");
+                    else next.delete("regularization_date");
+                    return next;
+                  });
+                  setForm({ ...form, regularization_date: v });
+                }}
+                className={inputClass}
+              />
+              <p className="mt-1 text-xs text-gray-400">Defaults to 6 months after hire date.</p>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">End Date</label>

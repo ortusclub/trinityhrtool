@@ -8,7 +8,7 @@ import { failed, payrollAdmin } from "../auth";
 //   { people: [{ email, ot: [{ date, hours, ndHours, restDay }], scheduledNd }] }
 // restDay: the employee's own day off that date per their attendance log
 // (rest day, on leave, or no scheduled shift); null when there is no log.
-// Approved overtime requests in the cutoff (the Overtime Requests report)
+// Overtime requests in the cutoff that are approved or pending (not rejected) (the Overtime Requests report)
 // and night-differential hours of scheduled shifts actually worked (the
 // Night Differential (Payroll) report), per employee by work email.
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -35,12 +35,13 @@ export async function GET(request: Request) {
     const [{ data: ot, error }, nd] = await Promise.all([
       admin
         .from("overtime_requests")
-        .select("employee_id, requested_date, start_time, end_time, employee:users!overtime_requests_employee_id_fkey(email)")
-        .eq("status", "approved")
+        .select("employee_id, requested_date, start_time, end_time, status, employee:users!overtime_requests_employee_id_fkey(email)")
+        // Filed overtime counts while pending as well as once approved; rejected never does.
+        .in("status", ["approved", "pending"])
         .gte("requested_date", from)
         .lte("requested_date", to)
         .order("requested_date"),
-      computeNightDifferentialSchedules(admin, { date_range: { from, to } }),
+      computeNightDifferentialSchedules(admin, { date_range: { from, to } }, { pendingAdjustments: true }),
     ]);
     if (error) throw new Error(error.message);
 
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
 
     type Person = {
       email: string;
-      ot: { date: string; hours: number; ndHours: number; restDay: boolean | null }[];
+      ot: { date: string; hours: number; ndHours: number; restDay: boolean | null; pending: boolean }[];
       scheduledNd: number;
     };
     const people = new Map<string, Person>();
@@ -80,6 +81,7 @@ export async function GET(request: Request) {
         hours: hoursBetween(r.start_time, r.end_time),
         ndHours: nightDifferentialHours(r.start_time, r.end_time),
         restDay: dayOff.get(`${r.employee_id}|${r.requested_date}`) ?? null,
+        pending: r.status === "pending",
       });
     }
     for (const r of nd) {

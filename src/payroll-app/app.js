@@ -1781,7 +1781,7 @@
     add(ded, 'SSS EE Contribution', sssApplied);
     add(ded, 'PhilHealth EE Contribution', phic);
     add(ded, 'HDMF EE Contribution', hdmf);
-    add(ded, 'Tax Withheld', slip.tax.withholding);
+    add(ded, slip.finalPay && slip.finalPay.annualWithholding !== null ? 'Tax Withheld (annualised)' : 'Tax Withheld', slip.tax.withholding);
     if (p.tendoPay) add(ded, 'Tendo Pay', p.tendoPay);
     if (p.sssLoan) add(ded, 'SSS Loan', p.sssLoan);
     if (p.hmo) add(ded, 'HMO', p.hmo);
@@ -2186,8 +2186,9 @@
           (cfg.leave === false ? '<div class="auto-note" style="color:var(--red)">not included \u2014 tick to pay it</div>' : '') +
           '</td>' +
         '<td class="num">' + box(emp, 'tax') + plain(fp.taxAdjustment) +
-          '<div class="auto-note">' + (fp.taxAdjustment >= 0 ? 'refund' : 'tax still due') + ' \u2014 due ' + plain(fp.annualTaxDue) +
-          ' on ' + plain(fp.annualTaxable) + ', withheld ' + plain(fp.ytdWithheld) + '</div></td>' +
+          '<div class="auto-note">annualised: due ' + plain(fp.annualTaxDue) + ' on ' + plain(fp.annualTaxable) +
+          ', withheld before this cutoff ' + plain(E.r2(fp.ytdWithheld + (fp.prevWithheld || 0))) + '</div>' +
+          '<div class="auto-note">' + (fp.taxAdjustment >= 0 ? 'refunded on this cutoff' : 'withheld on this cutoff, no semi-monthly tax') + '</div></td>' +
         '<td class="num">' + box(emp, 'loans') + plain(fp.loanBalance) + '</td>' +
         '<td class="num">' + plain(fp.clearanceTotal) + '</td>' +
         '<td class="num strong">' + (posted && d && d.posted ? '<span class="muted">from the payroll file</span>' : plain(slip.totals.netPay)) + '</td>' + note + '</tr>';

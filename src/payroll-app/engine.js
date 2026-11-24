@@ -504,6 +504,9 @@
     var travelDeduction = Math.min(transportationGiven, num(dtr.travelDeduction));
     var transportationAllowance = r2(transportationGiven - travelDeduction);
     var dmAuto = deMinimisFor(emp, period, settings);
+    /* The final-pay cutoff carries no de minimis (Japheth, 24 Nov 2026). */
+    var finalPayHere = !!(emp.finalPay && emp.finalPay.periodId === period.id);
+    if (finalPayHere) dmAuto.amount = 0;
     var deMinimis = dmAuto.amount;
     var quarterlyBonus = num(dtr.quarterlyBonus);
     var commission = num(dtr.commission);
@@ -620,7 +623,11 @@
     var nonTaxable = r2(transportationAllowance + deMinimis + items.totalNonTaxAllowance +
       thirteenthExempt + nonTaxableIncome);
     var netTaxable = r2(Math.max(0, incomeAfterMandatories - nonTaxable));
-    var tax = withholdingTax(netTaxable, settings);
+    /* The final-pay cutoff withholds the annualised tax (finalPayFor): the
+       year's tax due less what earlier cutoffs withheld, never the
+       semi-monthly table. Over-withheld comes back as the refund. */
+    var tax = extra && extra.annualWithholding !== undefined && extra.annualWithholding !== null
+      ? r2(num(extra.annualWithholding)) : withholdingTax(netTaxable, settings);
 
     /* ------------- post-tax deductions (cols AA - AE) ------------------ */
     var loans = collectLoans(emp, period);
@@ -1422,13 +1429,20 @@
       .map(function (c) { return { label: String(c.label).trim(), amount: r2(num(c.amount)) }; });
 
     var ytd = yearToDate(emp, taxYear, dtrMap, settings, period.payoutDate);
+    /* Tax withheld by the cutoffs before this one: this cutoff withholds the
+       annualised balance instead of the semi-monthly table. */
+    var dayBefore = ymd(new Date(parseYmd(period.payoutDate).getTime() - 86400000));
+    var priorWithheld = yearToDate(emp, taxYear, dtrMap, settings, dayBefore).taxWithheld;
     var prev = previousEmployer(emp, taxYear);
     // The year's benefits over the ceiling (or the quarterly bonus taxed in
     // the cutoffs that was within it, taken back off) — yearEndFor.
     var benefitsTaxable = on('thirteenth') ? ye.addTaxable : 0;
     var annualTaxable = r2(ytd.taxableIncome + benefitsTaxable + leaveTaxable + prev.taxable);
     var due = annualTax(annualTaxable, settings);
-    var taxAdjustment = on('tax') ? r2(ytd.taxWithheld + prev.withheld - due) : 0;
+    // Positive = refund of tax over-withheld before this cutoff; negative =
+    // tax still due, withheld on this cutoff as its annualised tax.
+    var taxAdjustment = on('tax') ? r2(priorWithheld + prev.withheld - due) : 0;
+    var annualWithholding = on('tax') ? r2(Math.max(0, -taxAdjustment)) : null;
 
     return {
       period: period,
@@ -1443,7 +1457,8 @@
       leaveAmount: leaveAmount, leaveTaxable: leaveTaxable, dailyRate: r2(daily),
       loanRows: loanRows, loanBalance: r2(loanRows.reduce(function (t, l) { return t + l.amount; }, 0)),
       clearance: clearance, clearanceTotal: r2(clearance.reduce(function (t, c) { return t + c.amount; }, 0)),
-      ytdTaxable: ytd.taxableIncome, ytdWithheld: ytd.taxWithheld,
+      ytdTaxable: ytd.taxableIncome, ytdWithheld: priorWithheld, prevWithheld: prev.withheld,
+      annualWithholding: annualWithholding,
       annualTaxable: annualTaxable, annualTaxDue: due, taxAdjustment: taxAdjustment
     };
   }
@@ -1469,7 +1484,8 @@
         periodById(emp.finalPay.periodId).payoutDate < period.payoutDate;
       if (fp) {
         extra = { thirteenthMonth: fp.thirteenth, thirteenthMonthTaxable: 0, yearEndBonus: fp.yearEndBonus,
-          taxRefund: fp.taxAdjustment, finalPay: fp };
+          taxRefund: fp.annualWithholding === null ? 0 : r2(Math.max(0, fp.taxAdjustment)),
+          annualWithholding: fp.annualWithholding, finalPay: fp };
       } else if ((post13th || postRefund || postLeave) && !settled) {
         var calc = yearEndFor(emp, year, dtrMap, settings);
         extra = {

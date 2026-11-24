@@ -41,6 +41,20 @@ export function MultiRowFieldEditor({
   const [rows, setRows] = useState(
     [...initialRows].sort((a, b) => a.row_index - b.row_index)
   );
+  // Dated history (e.g. salary): a date sub-field keyed effective_date makes
+  // the list newest-first and tags the entry in force today as Current.
+  const effectiveKey = field.subfields.find(
+    (sf) => sf.key === "effective_date" && sf.type === "date"
+  )?.key;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" }).format(new Date());
+  const displayRows = effectiveKey
+    ? [...rows].sort((a, b) =>
+        (b.data[effectiveKey] ?? "").localeCompare(a.data[effectiveKey] ?? "")
+      )
+    : rows;
+  const currentRowId = effectiveKey
+    ? displayRows.find((r) => r.data[effectiveKey] && r.data[effectiveKey] <= today)?.id
+    : undefined;
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft(field.subfields));
   const [saving, setSaving] = useState(false);
@@ -217,10 +231,14 @@ export function MultiRowFieldEditor({
         <p className="text-sm text-gray-500">No entries yet.</p>
       )}
 
-      {rows.map((r) => (
+      {displayRows.map((r) => (
         <div
           key={r.id}
-          className="rounded-lg border border-gray-200 bg-gray-50 p-3"
+          className={
+            r.id === currentRowId
+              ? "rounded-lg border border-green-300 bg-green-50/60 p-3"
+              : "rounded-lg border border-gray-200 bg-gray-50 p-3"
+          }
         >
           {editingId === r.id ? (
             <RowForm
@@ -234,6 +252,16 @@ export function MultiRowFieldEditor({
           ) : (
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1 space-y-1">
+                {r.id === currentRowId && (
+                  <span className="mb-1 inline-block rounded bg-green-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-green-800">
+                    Current
+                  </span>
+                )}
+                {effectiveKey && (r.data[effectiveKey] ?? "") > today && (
+                  <span className="mb-1 inline-block rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                    Upcoming
+                  </span>
+                )}
                 {field.subfields.map((sf) =>
                   r.data[sf.key] ? (
                     <p

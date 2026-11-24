@@ -116,7 +116,7 @@ export async function POST(request: Request) {
   type MultiRowDef = {
     id: string;
     label: string;
-    subfields: { key: string; label: string }[];
+    subfields: { key: string; label: string; type?: string }[];
   };
   const multiRowFields: MultiRowDef[] = [];
   for (const f of (fieldDefs ?? []) as FieldDef[]) {
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       multiRowFields.push({
         id: f.id,
         label: f.label,
-        subfields: (f.subfields ?? []).map((s) => ({ key: s.key, label: s.label })),
+        subfields: (f.subfields ?? []).map((s) => ({ key: s.key, label: s.label, type: s.type })),
       });
       continue;
     }
@@ -314,6 +314,7 @@ export async function POST(request: Request) {
     // One accumulated entry per multi-row field per CSV row. Each becomes
     // an append (new row_index) on the target employee's data.
     const multiRowAcc = new Map<string, Record<string, string>>();
+    const badMultiRow = new Set<string>();
 
     for (let i = 0; i < headers.length; i++) {
       if (i === emailIdx) continue;
@@ -322,6 +323,16 @@ export async function POST(request: Request) {
       if (raw.trim().length === 0) continue;
 
       if (plan.kind === "multirow") {
+        const sub = multiRowFields
+          .find((f) => f.id === plan.fieldId)
+          ?.subfields.find((sf) => sf.key === plan.subfieldKey);
+        if (sub?.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) {
+          // Dates are compared as text (newest-first, Current tag), so only
+          // YYYY-MM-DD is safe. Drop the whole entry rather than half-add it.
+          result.errors.push(`${email} → ${headers[i]}: Expected YYYY-MM-DD, got "${raw}" (entry not added)`);
+          badMultiRow.add(plan.fieldId);
+          continue;
+        }
         const existing = multiRowAcc.get(plan.fieldId) ?? {};
         existing[plan.subfieldKey] = raw.trim();
         multiRowAcc.set(plan.fieldId, existing);
@@ -353,6 +364,13 @@ export async function POST(request: Request) {
 
     const multiRowWrites: BulkImportPayload["rows"][number]["multi_row_writes"] = [];
     for (const [fieldId, data] of multiRowAcc) {
+      if (badMultiRow.has(fieldId)) continue;
+      const def = multiRowFields.find((f) => f.id === fieldId);
+      // A dated history entry without its date would never be Current.
+      if (def?.subfields.some((sf) => sf.key === "effective_date") && !data.effective_date) {
+        result.errors.push(`${email} → ${def.label}: no Effective Date (entry not added)`);
+        continue;
+      }
       const k = `${fieldId}|${userId}`;
       const next = (maxRowIndex.get(k) ?? -1) + 1;
       maxRowIndex.set(k, next);

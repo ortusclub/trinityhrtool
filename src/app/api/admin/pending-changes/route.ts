@@ -45,6 +45,34 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+
+  // Fields marked "only HR admins can edit" (e.g. Current Salary) can't be
+  // changed by anyone else, not even as a request for approval.
+  if (!["hr_admin", "super_admin"].includes(caller.role)) {
+    let fieldId: string | null = payload?.field_id ?? null;
+    if (!fieldId && payload?.row_id) {
+      const { data: row } = await admin
+        .from("profile_field_value_rows")
+        .select("field_id")
+        .eq("id", payload.row_id)
+        .maybeSingle();
+      fieldId = (row?.field_id as string | undefined) ?? null;
+    }
+    if (fieldId) {
+      const { data: field } = await admin
+        .from("profile_fields")
+        .select("label, admin_edit_only")
+        .eq("id", fieldId)
+        .maybeSingle();
+      if (field?.admin_edit_only) {
+        return NextResponse.json(
+          { error: `Only HR admins can change "${field.label}".` },
+          { status: 403 }
+        );
+      }
+    }
+  }
+
   const { data, error } = await admin
     .from("pending_changes")
     .insert({

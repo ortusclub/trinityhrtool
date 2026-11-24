@@ -815,6 +815,7 @@ function FieldRow({
     field.subfields ?? []
   );
   const [options, setOptions] = useState<string[]>(field.options ?? []);
+  const [adminEditOnly, setAdminEditOnly] = useState(!!field.admin_edit_only);
 
   const isBuiltIn = !!field.built_in_key;
 
@@ -866,9 +867,23 @@ function FieldRow({
             />
             Also visible to HR support
           </label>
+          <label className="flex items-center gap-1.5 text-xs text-gray-600">
+            <input
+              type="checkbox"
+              checked={adminEditOnly}
+              onChange={(e) => setAdminEditOnly(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            Only HR admins can edit
+          </label>
           <button
             type="button"
             onClick={() => {
+              // Sent only when changed, so saving works before the column exists.
+              const lockPatch =
+                adminEditOnly !== !!field.admin_edit_only
+                  ? { admin_edit_only: adminEditOnly }
+                  : {};
               const effectiveType = isBuiltIn ? field.field_type : fieldType;
               const subfieldsPatch =
                 effectiveType === "multi_row" ? { subfields } : {};
@@ -880,6 +895,7 @@ function FieldRow({
                 onSave({
                   visibility,
                   visible_to_recruiter: visibleToRecruiter,
+                  ...lockPatch,
                   ...subfieldsPatch,
                   ...optionsPatch,
                 });
@@ -889,6 +905,7 @@ function FieldRow({
                   field_type: fieldType,
                   visibility,
                   visible_to_recruiter: visibleToRecruiter,
+                  ...lockPatch,
                   ...subfieldsPatch,
                   ...optionsPatch,
                 });
@@ -973,6 +990,7 @@ function FieldRow({
           {PROFILE_FIELD_TYPE_LABELS[field.field_type]} ·{" "}
           {PROFILE_FIELD_VISIBILITY_LABELS[field.visibility]}
           {field.visible_to_recruiter ? " · + HR support" : ""}
+          {field.admin_edit_only ? " · only HR admins can edit" : ""}
           {valueCount > 0 ? ` · ${valueCount} value${valueCount === 1 ? "" : "s"} saved` : ""}
         </p>
         {AUTO_POPULATED_BUILT_IN_HINTS[field.built_in_key ?? ""] && (

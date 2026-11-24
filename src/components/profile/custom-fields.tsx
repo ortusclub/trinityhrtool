@@ -24,6 +24,7 @@ export function CustomFieldsSection({
   employeeLabel,
   canEdit,
   submitMode = "direct",
+  isHrAdmin = false,
 }: {
   section: ProfileFieldSection;
   fields: ProfileField[];
@@ -35,6 +36,8 @@ export function CustomFieldsSection({
   canEdit: boolean;
   /** "queue" = writes are submitted for admin approval (hr_support). */
   submitMode?: "direct" | "queue";
+  /** HR admins can edit fields marked admin_edit_only; nobody else can. */
+  isHrAdmin?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -53,6 +56,8 @@ export function CustomFieldsSection({
   const scalarFields = fields.filter((f) => f.field_type !== "multi_row");
   const multiRowFields = fields.filter((f) => f.field_type === "multi_row");
   const visibleFields = scalarFields; // scalar fields use the grid + edit toggle
+  const locked = (f: ProfileField) => !!f.admin_edit_only && !isHrAdmin;
+  const editableScalars = scalarFields.filter((f) => !locked(f));
   if (fields.length === 0) return null;
 
   const valueFor = (fieldId: string): string | null => {
@@ -69,7 +74,7 @@ export function CustomFieldsSection({
       | { kind: "upsert"; field: ProfileField; value: string }
       | { kind: "delete"; field: ProfileField; existingId: string };
     const changes: Change[] = [];
-    for (const f of visibleFields) {
+    for (const f of editableScalars) {
       const newValue = (draft[f.id] ?? "").trim();
       const existing = values.find((v) => v.field_id === f.id);
       const currentValue = existing?.value ?? "";
@@ -166,7 +171,7 @@ export function CustomFieldsSection({
         <h2 className="font-display text-sm uppercase tracking-wide text-gray-500">
           {section.name}
         </h2>
-        {canEdit && !editing && (
+        {canEdit && !editing && editableScalars.length > 0 && (
           <button
             type="button"
             onClick={() => setEditing(true)}
@@ -218,7 +223,7 @@ export function CustomFieldsSection({
             <label className="block text-xs font-medium text-gray-500">
               {f.label}
             </label>
-            {editing ? (
+            {editing && !locked(f) ? (
               f.field_type === "textarea" ? (
                 <textarea
                   rows={3}
@@ -303,7 +308,7 @@ export function CustomFieldsSection({
             employeeId={employeeId}
             employeeLabel={employeeLabel}
             initialRows={multiRowValues.filter((v) => v.field_id === f.id)}
-            canEdit={canEdit}
+            canEdit={canEdit && !locked(f)}
             submitMode={submitMode}
           />
         </div>

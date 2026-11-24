@@ -251,6 +251,7 @@ export default async function TeamMemberProfileTab({
             employeeLabel={employeeLabel}
             canEdit={canEditCustomFields}
             submitMode={customFieldsSubmitMode}
+            isHrAdmin={isAdmin}
           />
         );
       })}
